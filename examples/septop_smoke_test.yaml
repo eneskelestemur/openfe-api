@@ -1,0 +1,30 @@
+# The smallest SepTop campaign that has an edge: one reference and one other ligand. Not a
+# meaningful calculation -- RBFE would handle this series for a quarter of the cost -- it
+# exists so the SepTop pipeline can be exercised quickly.
+#
+#   openfe-api validate examples/septop_smoke_test.yaml
+
+protocol: septop
+name: septop_smoke_test
+
+protein:
+  chains: [A]
+
+ligands:
+  # Carries the protein and the pose taken as given.
+  - name: reference
+    structure: ../tests/data/mini_complex.cif
+    selector: {chain: L}
+    smiles: "C[C@H](O)c1ccccc1"
+  # SMILES only, so 'auto' places it on the common core they share.
+  - name: fluoro
+    smiles: "C[C@H](O)c1ccc(F)cc1"
+
+settings:
+  preset: screening
+  overrides:
+    complex_simulation_settings.production_length: 0.05 nanosecond
+    solvent_simulation_settings.production_length: 0.05 nanosecond
+
+execution:
+  repeats: 1

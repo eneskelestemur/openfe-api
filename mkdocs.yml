@@ -1,0 +1,62 @@
+site_name: openfe-api
+site_description: Run OpenFE free energy experiments on HPC and server VMs.
+site_url: https://eneskelestemur.github.io/openfe-api/
+repo_url: https://github.com/eneskelestemur/openfe-api
+repo_name: eneskelestemur/openfe-api
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle: {icon: material/weather-night, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle: {icon: material/weather-sunny, name: Switch to light mode}
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Input contract: input-contract.md
+  - Preparation: preparation.md
+  - Planning: planning.md
+  - Relative binding free energy: rbfe.md
+  - Separated topologies: septop.md
+  - Plain MD and relaxation: md.md
+  - Execution: execution.md
+  - Results: results.md
+  - Service and container: service.md
+  - CLI reference: cli.md
+  - API reference: api.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html          # required by the grid cards on the landing page
+  - pymdownx.details
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            separate_signature: true

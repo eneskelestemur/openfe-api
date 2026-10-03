@@ -1,0 +1,71 @@
+# RBFE over a congeneric series, where the reference comes from a structure model.
+# Edit the paths, selectors and SMILES for your own system.
+#
+# The reference entry defines the frame: it supplies the protein and the one pose used exactly
+# as given. Every other ligand is placed on its common core with the reference, so a ligand may
+# be SMILES only -- but then it must define every stereocenter, since there is no pose to
+# resolve one from.
+
+protocol: rbfe
+name: my_rbfe_campaign
+
+reference: ligand_1                   # defaults to the first entry
+
+protein:
+  chains: [A]                         # omit to keep every chain
+  ph: 7.4
+  keep_waters: false
+
+ligands:
+  # The reference: carries the protein and the pose that defines the frame.
+  - name: ligand_1
+    structure: ./af3_run/model.cif
+    selector: {chain: E, resname: LIG_E}
+    smiles: "COc1ccc(cc1)C(=O)Nc1ccccc1"
+
+  # SMILES only: the pose is generated on the common core.
+  - name: ligand_2
+    smiles: "CCOc1ccc(cc1)C(=O)Nc1ccccc1"
+  - name: ligand_3
+    smiles: "Fc1ccc(cc1)C(=O)Nc1ccccc1"
+
+  # Has its own prediction. Still placed on the core; the prediction becomes a cross-check.
+  - name: ligand_4
+    structure: ./af3_run_ligand_4/model.cif
+    selector: {chain: E, resname: LIG_E}
+    smiles: "Clc1ccc(cc1)C(=O)Nc1ccc(C)cc1"
+
+cofactors:
+  - name: NAD
+    selector: {chain: C}
+    smiles: "NC(=O)c1ccc[nH+]c1"
+
+similarity:
+  min_core_fraction: 0.6              # of the smaller molecule's heavy atoms
+  allow_ring_break: false
+  # core_smarts: "O=C(Nc1ccccc1)c1ccccc1"   # skip the search when the core is known
+
+alignment:
+  pose: mcs                           # mcs | keep
+  n_conformers: 50
+  max_core_rmsd: 0.5                  # angstrom
+  rank_by: clash                      # clash | energy
+  pocket_radius: 10.0
+
+network:
+  method: minimal_redundant           # minimal_redundant | minimal_spanning | radial | explicit
+  redundancy: 2
+  mapper: lomap                       # lomap | kartograf | both
+
+charges:
+  correct_single: true                # a difference of one costs roughly four times as much
+  allow_multi: false                  # larger differences have no correction
+
+settings:
+  preset: default                     # default | screening
+  overrides:
+    thermo_settings.temperature: 310 kelvin
+
+execution:
+  profile: cluster_gpu
+  repeats: 3

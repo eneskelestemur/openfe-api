@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.pdb -text
+*.sdf -text
+*.mol2 -text

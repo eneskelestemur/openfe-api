@@ -1,0 +1,70 @@
+# openfe-api as an Apptainer image, for HPC where Docker is not available.
+#
+# Self-contained: it installs the same environment.yml the Dockerfile does, so no Docker
+# daemon is needed to build it.
+#   apptainer build openfe-api.sif container/apptainer.def
+#
+# Run the CLI:
+#   apptainer run --bind /work:/work openfe-api.sif openfe-api status /work/campaigns/my_run
+#
+# Run the service:
+#   apptainer run --bind /work:/work openfe-api.sif \
+#       uvicorn openfe_api.service:app --host 0.0.0.0 --port 8000
+#
+# Run simulations on a GPU node:
+#   apptainer run --nv --bind /work:/work openfe-api.sif openfe-api submit /work/campaigns/my_run
+#
+# To submit to the host's Slurm from inside the container, bind the Slurm client, its
+# configuration and the Munge socket, and pass the Slurm environment through. The exact
+# set differs per cluster, so it is left to the site's own launch wrapper.
+Bootstrap: docker
+From: mambaorg/micromamba:2.0.5
+
+# Not /tmp: Apptainer bind-mounts the host's over it during %post.
+%files
+    container/environment.yml /opt/openfe-api/environment.yml
+    pyproject.toml /opt/openfe-api/pyproject.toml
+    README.md /opt/openfe-api/README.md
+    src /opt/openfe-api/src
+
+%post
+    export MAMBA_ROOT_PREFIX=/opt/conda
+    micromamba install -y -p /opt/conda -f /opt/openfe-api/environment.yml
+    micromamba clean --all --yes
+    /opt/conda/bin/pip install --no-deps --no-cache-dir /opt/openfe-api
+
+%environment
+    export PATH="/opt/conda/bin:${PATH}"
+    export OPENFE_API_ROOT="${OPENFE_API_ROOT:-/data/campaigns}"
+    export OPENFE_API_PROCESSORS="${OPENFE_API_PROCESSORS:-1}"
+    # HOME is root's and the image is read-only, so these caches need a writable path or
+    # every invocation warns.
+    export MPLCONFIGDIR="${MPLCONFIGDIR:-/tmp/openfe-api-matplotlib}"
+    export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/openfe-api-cache}"
+
+%runscript
+    # Bare `apptainer run` has nothing to exec.
+    if [ $# -eq 0 ]; then
+        exec openfe-api --help
+    fi
+    exec "$@"
+
+%startscript
+    exec uvicorn openfe_api.service:app --host 0.0.0.0 --port "${OPENFE_API_PORT:-8000}"
+
+%test
+    openfe-api version
+    python -c "import openfe_api.service"
+
+%labels
+    Name openfe-api
+
+%help
+    Runs OpenFE free energy campaigns (ABFE, RBFE, SepTop) and plain MD, as a CLI or an
+    HTTP service. Run `openfe-api version` in the image to see which version it carries.
+
+    Mount your data and point OPENFE_API_ROOT at a campaigns directory on it.
+
+    An image built from the Dockerfile instead (Bootstrap: docker-daemon, From:
+    openfe-api:latest) behaves the same; this recipe exists so a cluster without Docker
+    can build one directly.

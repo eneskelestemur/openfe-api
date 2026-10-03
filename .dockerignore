@@ -1,0 +1,6 @@
+# Only these reach the image; the repo beside them holds hundreds of gigabytes.
+*
+!pyproject.toml
+!README.md
+!src/
+!container/environment.yml

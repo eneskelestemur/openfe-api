@@ -1,0 +1,40 @@
+# RBFE over a series docked into one fixed receptor.
+# Edit the paths and SMILES for your own system.
+#
+# Docking into a static pocket already puts every ligand in the receptor's frame, so
+# 'alignment.pose: keep' takes the coordinates as given rather than throwing the docking away.
+# A single ligand can override that with its own 'pose'.
+
+protocol: rbfe
+name: my_docked_campaign
+
+protein:
+  path: ./receptor.pdb                # the fixed receptor everything was docked into
+  chains: [A]
+
+alignment:
+  pose: keep
+
+ligands:
+  - name: ligand_1
+    path: ./docked/ligand_1.sdf
+    smiles: "COc1ccc(cc1)C(=O)Nc1ccccc1"
+  - name: ligand_2
+    path: ./docked/ligand_2.sdf
+    smiles: "CCOc1ccc(cc1)C(=O)Nc1ccccc1"
+  - name: ligand_3
+    path: ./docked/ligand_3.sdf
+    smiles: "Fc1ccc(cc1)C(=O)Nc1ccccc1"
+
+  # No docked pose for this one, so build it on the common core instead.
+  - name: ligand_4
+    smiles: "Clc1ccc(cc1)C(=O)Nc1ccccc1"
+    pose: mcs
+
+network:
+  method: minimal_redundant
+  redundancy: 2
+
+execution:
+  profile: cluster_gpu
+  repeats: 3

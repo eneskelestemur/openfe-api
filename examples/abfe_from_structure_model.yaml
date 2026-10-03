@@ -1,0 +1,37 @@
+# ABFE from a combined structure-model file (AlphaFold 3, Boltz-2, ...).
+# Edit the paths, selectors and SMILES for your own system.
+#
+# A homodimer, as structure models often produce: two protein chains, a cofactor bound to each,
+# and a ligand copy in each site. Chain E is the alchemical ligand, so 'extra_ligand_copies'
+# decides what happens to the copy in chain F.
+
+protocol: abfe
+name: my_abfe_campaign
+
+complexes:
+  - name: ligand_1
+    structure: ./model.cif            # the model file, not the prediction folder
+    protein:
+      chains: [A, B]
+      ph: 7.4
+      keep_waters: false
+    ligand:
+      selector: {chain: E, resname: LIG_E}
+      smiles: "c1ccc(cc1)C(=O)NC2CCCCC2"
+    extra_ligand_copies: drop         # drop | keep, required for a combined file
+    cofactors:
+      - name: NAD_C
+        selector: {chain: C, resname: LIG_C}
+        smiles: "NC(=O)c1ccc[n+]([C@@H]2O[C@H](CO[P@@](=O)([O-])O[P@@](=O)(O)OC[C@H]3O[C@@H](n4cnc5c(N)ncnc54)[C@H](O)[C@@H]3O)[C@@H](O)[C@H]2O)c1"
+      - name: NAD_D
+        selector: {chain: D, resname: LIG_D}
+        smiles: "NC(=O)c1ccc[n+]([C@@H]2O[C@H](CO[P@@](=O)([O-])O[P@@](=O)(O)OC[C@H]3O[C@@H](n4cnc5c(N)ncnc54)[C@H](O)[C@@H]3O)[C@@H](O)[C@H]2O)c1"
+
+settings:
+  preset: default                     # default | screening
+  overrides:
+    thermo_settings.temperature: 310 kelvin
+
+execution:
+  profile: cluster_gpu                # from your profiles file; sets backend and GPU packing
+  repeats: 3                          # each repeat runs as its own process

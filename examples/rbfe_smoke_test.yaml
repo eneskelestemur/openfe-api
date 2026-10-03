@@ -1,0 +1,32 @@
+# A tiny RBFE series built from the data shipped with the tests. Not a meaningful calculation;
+# it exists so the series pipeline can be exercised quickly.
+#
+#   openfe-api validate examples/rbfe_smoke_test.yaml
+
+protocol: rbfe
+name: rbfe_smoke_test
+
+protein:
+  chains: [A]
+
+ligands:
+  # The reference: carries the protein and the pose taken as given.
+  - name: phenylethanol
+    structure: ../tests/data/mini_complex.cif
+    selector: {chain: L}
+    smiles: "C[C@H](O)c1ccccc1"
+  - name: methyl_analogue
+    smiles: "C[C@H](O)c1ccc(C)cc1"
+  - name: fluoro_analogue
+    smiles: "C[C@H](O)c1ccc(F)cc1"
+
+cofactors:
+  - name: acetate
+    selector: {chain: C}
+    smiles: "CC(=O)[O-]"
+
+settings:
+  preset: screening
+
+execution:
+  repeats: 1

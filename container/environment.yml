@@ -1,0 +1,28 @@
+# Runtime environment for the openfe-api container, and the one developers and CI build from.
+#
+# Unnamed on purpose: the Docker image installs into base, the Apptainer image into a prefix,
+# and everyone else into a named environment.
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - openfe=1.12
+  - openmm>=8.2
+  - cuda-version=12
+  - openmmforcefields>=0.15.1
+  - pdbfixer
+  - rdkit
+  - mdanalysis
+  - openff-nagl
+  - ambertools
+  - pydantic>=2.9
+  - pydantic-settings>=2.4
+  - typer>=0.12
+  - rich>=13.0
+  - pyyaml>=6.0
+  - numpy
+  - pip
+  - pip:
+      - fastapi>=0.110
+      - uvicorn>=0.30
+      - python-multipart>=0.0.18

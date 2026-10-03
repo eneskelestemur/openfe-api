@@ -1,0 +1,38 @@
+# Plain MD of a predicted complex, and of the same protein without its ligand.
+# Edit the paths and SMILES for your own system.
+#
+# Nothing here is alchemical, so a system may hold any number of molecules, a protein on its
+# own, or a ligand on its own, and a charged molecule is no problem.
+
+protocol: md
+name: my_md_campaign
+
+systems:
+  - name: holo
+    structure: ./af3_model.cif
+    protein:
+      chains: [A]
+      ph: 7.4
+    ligands:
+      - name: lig
+        selector: {chain: E, resname: LIG_E}
+        smiles: "Cc1ccc(cc1)C(=O)Nc1ccccc1"
+    cofactors:
+      - name: nad
+        selector: {chain: C, resname: LIG_C}
+        smiles: "NC(=O)c1ccccc1"
+
+  # The same protein with nothing bound, as a reference for how the pocket behaves.
+  - name: apo
+    structure: ./af3_model.cif
+    protein:
+      chains: [A]
+
+settings:
+  preset: default            # 0.1 ns NVT, 1 ns NPT, 5 ns production
+  overrides:
+    thermo_settings.temperature: 310 kelvin
+
+execution:
+  profile: cluster_gpu
+  repeats: 3                 # independent runs, each from its own velocities

@@ -1,0 +1,27 @@
+# ABFE from separate protein, ligand and cofactor files.
+# Edit the paths and SMILES for your own system.
+#
+# Each component has its own file, so no selectors are needed and 'extra_ligand_copies' does
+# not apply.
+
+protocol: abfe
+name: my_split_campaign
+
+complexes:
+  - name: ligand_1
+    protein:
+      path: ./protein.pdb
+      ph: 7.4
+    ligand:
+      path: ./ligands/ligand_1.sdf
+      smiles: "c1ccc(cc1)C(=O)NC2CCCCC2"
+    cofactors:
+      - name: NAD
+        path: ./cofactors.sdf
+        smiles: "NC(=O)c1ccc[n+]([C@@H]2O[C@H](CO[P@@](=O)([O-])O[P@@](=O)(O)OC[C@H]3O[C@@H](n4cnc5c(N)ncnc54)[C@H](O)[C@@H]3O)[C@@H](O)[C@H]2O)c1"
+
+settings:
+  preset: screening
+
+execution:
+  repeats: 1                           # the built-in local profile is used

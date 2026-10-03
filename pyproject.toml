@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openfe-api"
+version = "0.1.0"
+description = "An API for running OpenFE free energy experiments on HPC and server VMs."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Enes Kelestemur" }]
+keywords = ["free energy", "openfe", "molecular dynamics", "alchemistry", "hpc"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.4",
+    "typer>=0.12",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+service = ["fastapi>=0.110", "uvicorn>=0.30", "python-multipart>=0.0.18"]
+dev = ["pytest>=8.0", "pyright>=1.1.390", "ruff>=0.6", "httpx2>=2.0"]
+# Capped: MkDocs 2.0 removes the plugin system this build depends on, with no migration
+# path, so a fresh install must not pick it up on its own.
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5,<10", "mkdocstrings[python]>=0.26"]
+
+[project.urls]
+Homepage = "https://github.com/eneskelestemur/openfe-api"
+Documentation = "https://eneskelestemur.github.io/openfe-api/"
+Repository = "https://github.com/eneskelestemur/openfe-api"
+Changelog = "https://github.com/eneskelestemur/openfe-api/blob/main/CHANGELOG.md"
+
+[project.scripts]
+openfe-api = "openfe_api.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# PEP 561: without this marker a downstream type checker ignores the annotations.
+[tool.setuptools.package-data]
+openfe_api = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The tests mirror the package, so the same basename appears in several directories; importlib
+# mode keeps those distinct without __init__.py files. pythonpath puts the shared builders in
+# tests/helpers.py on the path for every directory.
+pythonpath = ["tests"]
+addopts = "-m 'not slow and not gpu' --import-mode=importlib"
+markers = [
+    "slow: tests that take more than a few seconds",
+    "gpu: tests that require a GPU and a real simulation engine",
+]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Pinned rather than inherited, so a ruff upgrade cannot change the house style.
+select = [
+    "B",    # likely bugs
+    "D",    # docstrings, Google style
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import order
+    "ISC",  # implicit string concatenation
+    "PLW",  # pylint warnings
+    "RET",  # return statements
+    "RUF",  # ruff's own rules
+    "SIM",  # simplifications
+    "UP",   # modern syntax for the minimum Python
+    "W",    # pycodestyle warnings
+]
+
+# BLE001 is deliberately not selected. Preparation and planning call into RDKit, gufe and
+# OpenFE, which raise whatever they like, so those calls catch broadly and re-raise a named
+# error of our own; narrowing would leak third-party exception types to the caller.
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves through their names, and assertions carry the intent.
+"tests/*" = ["D100", "D103"]

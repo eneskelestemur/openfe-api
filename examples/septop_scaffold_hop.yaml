@@ -1,0 +1,47 @@
+# SepTop over a set of ligands that share a binding site but not a scaffold.
+# Edit the paths and SMILES for your own system.
+#
+# No atom mapping is needed, so this runs the hops relative hybrid topology cannot map. Every
+# edge costs the same whatever the pair, roughly 510 ns per repeat, and the result rests
+# entirely on the poses.
+
+protocol: septop
+name: my_septop_campaign
+
+reference: lead                       # supplies the protein and the one trusted pose
+
+protein:
+  chains: [A]
+  ph: 7.4
+
+ligands:
+  - name: lead
+    structure: ./lead_complex.cif     # the protein comes from here
+    selector: {chain: B, resname: LIG}
+    smiles: "Cc1ccc(cc1)C(=O)Nc1ccccc1"
+
+  # A close analogue: 'auto' places it on the common core.
+  - name: ethyl_analogue
+    smiles: "CCc1ccc(cc1)C(=O)Nc1ccccc1"
+
+  # A scaffold hop: no usable core, so 'auto' overlays it on the lead's shape.
+  - name: saturated_hop
+    smiles: "O=C(Nc1ccncc1)C1CCOCC1"
+
+  # Already docked into this receptor, so keep the pose that was docked.
+  - name: docked_hop
+    path: ./docked/hop_2.sdf
+    smiles: "O=C(Nc1ccncc1)C1CCNCC1"
+    pose: keep
+
+network:
+  method: radial                      # a star on the reference; the hub defaults to it
+
+screening:
+  policy: warn                        # 'drop' excludes a ligand that fails a threshold
+  max_size_ratio: 1.5
+  max_clashes: 5
+
+execution:
+  profile: cluster_gpu
+  repeats: 3

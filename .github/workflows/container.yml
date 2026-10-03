@@ -1,0 +1,46 @@
+name: Container
+
+# Build-check only: nothing is pushed. A broken image recipe is the part that fails
+# silently.
+on:
+  push:
+    branches: [main]
+    paths: [container/**, pyproject.toml, src/**, .github/workflows/container.yml]
+  pull_request:
+    paths: [container/**, pyproject.toml, src/**, .github/workflows/container.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # The conda stack is several gigabytes; a hosted runner has little room to spare.
+      - name: Reclaim disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: container/Dockerfile
+          push: false
+          load: true          # so the checks below can run the image
+          tags: openfe-api:ci
+          cache-from: type=gha
+          cache-to: type=gha
+
+      - name: Check the entry points
+        run: |
+          docker run --rm openfe-api:ci openfe-api version
+          docker run --rm openfe-api:ci python -c "import openfe_api.service"

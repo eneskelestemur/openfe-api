@@ -1,0 +1,40 @@
+# Execution profiles: the cluster-specific half of running a campaign. A request names one of
+# these in 'execution.profile'; pass this file with 'openfe-api submit --profiles <file>'.
+#
+# Copy it and edit it for your own site.
+
+# A GPU partition where several repeats share one card through CUDA MPS.
+cluster_gpu:
+  backend: slurm
+  jobs_per_gpu: 3          # three repeats share one GPU through CUDA MPS
+  setup_commands:
+    - source ~/.bashrc
+    - conda activate openfe-api
+  slurm:
+    partition: gpu
+    qos: gpu_access        # remove if your cluster does not require one
+    time: 3-00:00:00
+    gres: gpu:1
+    cpus_per_task: 12
+    memory: 128G
+
+# A larger GPU with room for more concurrent repeats.
+cluster_gpu_large:
+  backend: slurm
+  jobs_per_gpu: 4
+  setup_commands:
+    - source ~/.bashrc
+    - conda activate openfe-api
+  slurm:
+    partition: gpu-large
+    time: 6-00:00:00
+    gres: gpu:1
+    cpus_per_task: 16
+    memory: 128G
+    extra_directives:
+      - --account=my_account
+
+# A single machine or a server VM, with no scheduler.
+workstation:
+  backend: local
+  jobs_per_gpu: 2          # two concurrent repeats per GPU, via MPS

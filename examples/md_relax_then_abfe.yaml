@@ -1,0 +1,33 @@
+# An ABFE campaign that relaxes its input structure before preparing it. Worth doing when the
+# input came from a structure model, whose output carries strain a force field would not produce.
+# Edit the paths and SMILES for your own system.
+#
+#   openfe-api create  md_relax_then_abfe.yaml ./campaign
+#   openfe-api relax   ./campaign --profiles profiles.yaml   # a GPU job
+#   openfe-api prep    ./campaign                            # reads the relaxed frame
+#   openfe-api plan    ./campaign
+
+protocol: abfe
+name: my_relaxed_campaign
+
+relax:
+  enabled: true
+  length: 1 nanosecond       # the NPT equilibration; short on purpose
+
+complexes:
+  - name: complex_1
+    structure: ./af3_model.cif
+    protein:
+      chains: [A]
+      ph: 7.4
+    ligand:
+      selector: {chain: E, resname: LIG_E}
+      smiles: "Cc1ccc(cc1)C(=O)Nc1ccccc1"
+    extra_ligand_copies: drop
+
+settings:
+  preset: default
+
+execution:
+  profile: cluster_gpu
+  repeats: 3

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, types and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -el {0}   # a login shell, so the conda environment is active
+    steps:
+      - uses: actions/checkout@v4
+
+      # The tests import the conda-forge stack, so the real environment is the only one that
+      # can run them.
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: container/environment.yml
+          environment-name: openfe-api
+          cache-environment: true
+
+      - name: Install the package
+        run: pip install -e '.[service,dev,docs]'
+
+      - name: Formatting
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Types
+        run: python -m pyright
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Slow tests
+        run: pytest -q -m slow
+
+      # Here rather than on the deploy, so a broken link fails before a merge.
+      - name: Documentation
+        run: mkdocs build --strict
+
+  pages:
+    name: Deploy documentation
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -el {0}
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: container/environment.yml
+          environment-name: openfe-api
+          cache-environment: true
+
+      # The API reference imports the package, so the stack is needed here too.
+      - name: Install the package
+        run: pip install -e '.[service,docs]'
+
+      - name: Build
+        run: mkdocs build --strict
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: If you use openfe-api in published work, please cite it along with OpenFE.
+title: "openfe-api: an API for running OpenFE free energy experiments on HPC and server VMs"
+abstract: >-
+  Runs OpenFE absolute, relative and separated-topologies binding free energy calculations,
+  and plain molecular dynamics, from protein-ligand structures on a Slurm cluster or a server
+  VM, as a Python library, a command line tool, or an HTTP service.
+type: software
+authors:
+  - family-names: Kelestemur
+    given-names: Enes
+version: 0.1.0
+date-released: "2026-10-03"
+license: MIT
+repository-code: https://github.com/eneskelestemur/openfe-api
+url: https://eneskelestemur.github.io/openfe-api/
+keywords:
+  - free energy
+  - openfe
+  - molecular dynamics
+  - alchemistry

@@ -1,0 +1,31 @@
+# A tiny campaign built from the data shipped with the tests. Not a meaningful calculation --
+# the "protein" is a twelve residue fragment -- but it exercises every stage without a GPU.
+#
+#   openfe-api create examples/abfe_smoke_test.yaml ./smoke
+#   openfe-api prep   ./smoke
+#   openfe-api plan   ./smoke
+
+protocol: abfe
+name: smoke_test
+
+complexes:
+  - name: phenylethanol
+    structure: ../tests/data/mini_complex.cif
+    protein:
+      chains: [A]
+    ligand:
+      selector: {chain: L}
+      smiles: "C[C@H](O)c1ccccc1"
+    extra_ligand_copies: drop
+    cofactors:
+      - name: acetate
+        selector: {chain: C}
+        smiles: "CC(=O)[O-]"
+
+settings:
+  preset: screening
+  overrides:
+    partial_charge_settings.partial_charge_method: nagl   # seconds, not minutes
+
+execution:
+  repeats: 1                           # the built-in local profile is used
