@@ -4,6 +4,8 @@ Run [OpenFE](https://docs.openfree.energy/) free energy experiments from protein
 structures, on a Slurm cluster or a server VM. Usable as a Python library, a CLI, and a
 containerized FastAPI service.
 
+**[Documentation](https://eneskelestemur.github.io/openfe-api/)**
+
 Status: early development, version 0.1.0. Every protocol is implemented and has run end to end
 on GPUs, but only at smoke lengths, so no production numbers have been produced yet. Structured
 analysis of trajectories is the next milestone.
