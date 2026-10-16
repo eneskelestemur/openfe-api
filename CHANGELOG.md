@@ -8,6 +8,21 @@ All notable changes to this project are recorded here. The format follows
 
 Nothing yet.
 
+## [0.1.1] - 2026-10-16
+
+### Fixed
+
+- Placing a ligand on its common core failed for a series built on a bridged aromatic bicyclic,
+  such as a pyrazolo[1,5-a]pyridine. MMFF typing kekulizes the molecule it is given and the
+  aromatic flags do not come back, so the core query, which is written in aromatic bonds,
+  stopped matching and every analogue was dropped with "the common core no longer matches after
+  building the molecule". A core now matches whatever kekulé state the molecule is in.
+- Shape alignment typed the reference ligand it was handed. A series reuses one reference for
+  every ligand, so that left it kekulized for everything placed afterwards. It is typed on a
+  copy, which O3A scores identically.
+- A series with no edge to run named `prep_report.json` as the place to find the per-ligand
+  reasons without having written it. The report is written before the refusal.
+
 ## [0.1.0] - 2026-10-03
 
 First release. This entry describes what the project does.
@@ -60,5 +75,6 @@ First release. This entry describes what the project does.
   front and leaves simulation output out unless asked for.
 - Docker and Apptainer images carrying both entry points.
 
-[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/eneskelestemur/openfe-api/releases/tag/v0.1.0

@@ -9,7 +9,13 @@ from rdkit.Chem import rdDistGeom, rdForceFieldHelpers, rdMolAlign
 
 from openfe_api.exceptions import InputValidationError
 from openfe_api.prep.mcs import find_core, match_core
-from openfe_api.prep.pose import CLASH_DISTANCE, clash_score, generate_pose, superpose_on_core
+from openfe_api.prep.pose import (
+    CLASH_DISTANCE,
+    clash_score,
+    generate_pose,
+    shape_pose,
+    superpose_on_core,
+)
 from openfe_api.schema.rbfe import AlignmentSpec
 
 REFERENCE = "Cc1ccc(cc1)C(=O)Nc1ccccc1"
@@ -211,3 +217,77 @@ def test_the_core_lands_on_the_reference_for_a_drug_sized_ligand() -> None:
             pose_positions[probe_index] - reference_positions[reference_index]
         )
         assert separation < 0.5
+
+
+# A bridged aromatic bicyclic. MMFF typing kekulizes one of these and the aromatic flags do
+# not come back, which a monocycle like benzene or pyridine never shows.
+BRIDGED_REFERENCE = "O=C(NC1CC1)c1cnn2ccccc12"
+BRIDGED_ANALOGUE = "O=C(NC1CCC1)c1cnn2ccccc12"
+
+
+def _aromatic_atoms(molecule: Chem.Mol) -> int:
+    """Count the atoms currently flagged aromatic."""
+    return sum(1 for atom in molecule.GetAtoms() if atom.GetIsAromatic())
+
+
+def test_a_bridged_aromatic_bicyclic_can_be_placed() -> None:
+    """A whole series can share this scaffold, and typing it kekulizes it mid-placement."""
+    reference = probe(BRIDGED_REFERENCE)
+    rdDistGeom.EmbedMolecule(reference, randomSeed=1)
+    molecule = probe(BRIDGED_ANALOGUE)
+    core = find_core(reference, molecule)
+
+    generated = generate_pose(molecule, reference, core, AlignmentSpec(n_conformers=5))
+
+    assert generated.conformers_accepted >= 1
+    assert generated.core_rmsd is not None
+    assert generated.core_rmsd <= AlignmentSpec().max_core_rmsd
+
+
+def test_the_core_still_matches_a_kekulized_molecule() -> None:
+    """MMFF typing leaves the molecule kekulized, and the core query is aromatic."""
+    reference = probe(BRIDGED_REFERENCE)
+    rdDistGeom.EmbedMolecule(reference, randomSeed=1)
+    molecule = probe(BRIDGED_ANALOGUE)
+    rdDistGeom.EmbedMolecule(molecule, randomSeed=1)
+    core = find_core(reference, molecule)
+    expected = match_core(molecule, core)
+
+    rdForceFieldHelpers.MMFFGetMoleculeProperties(molecule)
+
+    assert _aromatic_atoms(molecule) < 9
+    assert match_core(molecule, core) == expected
+
+
+def test_shape_alignment_leaves_the_reference_untouched() -> None:
+    """One reference serves every ligand of a series, so it has to come back as it went in."""
+    reference = probe(BRIDGED_REFERENCE)
+    rdDistGeom.EmbedMolecule(reference, randomSeed=1)
+    molecule = probe(BRIDGED_ANALOGUE)
+    core = find_core(reference, molecule)
+    before = _aromatic_atoms(reference)
+
+    shape_pose(molecule, reference, AlignmentSpec(n_conformers=3))
+
+    assert _aromatic_atoms(reference) == before
+    assert match_core(reference, core)
+
+
+def test_the_force_field_still_sees_a_kekulized_molecule() -> None:
+    """Typing a copy would leave the molecule aromatic and change every MMFF energy."""
+    typed_in_place = probe(BRIDGED_ANALOGUE)
+    rdDistGeom.EmbedMolecule(typed_in_place, randomSeed=1)
+    left_aromatic = probe(BRIDGED_ANALOGUE)
+    rdDistGeom.EmbedMolecule(left_aromatic, randomSeed=1)
+
+    in_place = rdForceFieldHelpers.MMFFGetMoleculeForceField(
+        typed_in_place, rdForceFieldHelpers.MMFFGetMoleculeProperties(typed_in_place), confId=0
+    ).CalcEnergy()
+    from_copy = rdForceFieldHelpers.MMFFGetMoleculeForceField(
+        left_aromatic,
+        rdForceFieldHelpers.MMFFGetMoleculeProperties(Chem.Mol(left_aromatic)),
+        confId=0,
+    ).CalcEnergy()
+
+    assert _aromatic_atoms(typed_in_place) < _aromatic_atoms(left_aromatic)
+    assert in_place != pytest.approx(from_copy)

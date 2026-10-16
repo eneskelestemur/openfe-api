@@ -183,6 +183,23 @@ def test_a_series_with_nothing_to_run_is_rejected(
         prepare(series_data, tmp_path / "prepared")
 
 
+def test_the_report_is_written_even_when_there_is_no_edge_to_run(
+    series_data: dict[str, Any], tmp_path: Path
+) -> None:
+    """The refusal sends the reader to the report, so the report has to be there."""
+    series_data["ligands"] = [
+        series_data["ligands"][0],
+        {"name": "unrelated", "smiles": "NC(=O)c1ccncc1C(F)(F)F"},
+    ]
+    output_dir = tmp_path / "prepared"
+
+    with pytest.raises(InputValidationError):
+        prepare(series_data, output_dir)
+
+    written = json.loads((output_dir / "prep_report.json").read_text(encoding="utf-8"))
+    assert "unrelated" in written["dropped"]
+
+
 def test_clashes_against_the_protein_are_reported(
     series_data: dict[str, Any], tmp_path: Path
 ) -> None:

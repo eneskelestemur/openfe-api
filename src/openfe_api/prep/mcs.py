@@ -86,6 +86,20 @@ def match_core(molecule: Chem.Mol, core: CommonCore) -> tuple[tuple[int, ...], .
         Atom index tuples, each in the core's atom order, at most
         :data:`MAX_CORE_MAPPINGS` of them.
     """
+    matches = _substructure_matches(molecule, core)
+    if matches:
+        return matches
+
+    # The core query is written in aromatic bonds, and MMFF typing kekulizes the molecule it
+    # types, so a molecule that has been through the force field needs its flags back first
+    restored = Chem.Mol(molecule)
+    if Chem.SanitizeMol(restored, catchErrors=True) != Chem.SanitizeFlags.SANITIZE_NONE:
+        return matches
+    return _substructure_matches(restored, core)
+
+
+def _substructure_matches(molecule: Chem.Mol, core: CommonCore) -> tuple[tuple[int, ...], ...]:
+    """Return the core's matches on a molecule exactly as it stands."""
     return molecule.GetSubstructMatches(
         core.pattern, uniquify=False, useChirality=False, maxMatches=MAX_CORE_MAPPINGS
     )

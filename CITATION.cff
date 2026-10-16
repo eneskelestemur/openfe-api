@@ -9,8 +9,8 @@ type: software
 authors:
   - family-names: Kelestemur
     given-names: Enes
-version: 0.1.0
-date-released: "2026-10-03"
+version: 0.1.1
+date-released: "2026-10-16"
 license: MIT
 repository-code: https://github.com/eneskelestemur/openfe-api
 url: https://eneskelestemur.github.io/openfe-api/

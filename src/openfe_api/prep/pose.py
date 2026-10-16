@@ -295,7 +295,9 @@ def shape_pose(
     molecule, conformer_ids = _embed(molecule, spec.n_conformers, seed)
 
     properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(molecule)
-    reference_properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(reference)
+    # Typed on a copy: the caller reuses one reference for every ligand of the series, and
+    # typing kekulizes what it is handed. O3A gives the same alignment either way.
+    reference_properties = rdForceFieldHelpers.MMFFGetMoleculeProperties(Chem.Mol(reference))
     if spec.rank_by == "energy" and properties is None:
         raise InputValidationError(
             "ranking shape-aligned conformers by energy needs MMFF parameters, which this "

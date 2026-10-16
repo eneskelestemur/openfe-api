@@ -265,13 +265,6 @@ def prepare_series(
             continue
         placements.append(placement)
 
-    if len(placements) < 2:
-        raise InputValidationError(
-            f"{request.name}: only the reference ligand '{reference_spec.name}' could be "
-            "placed, so there is no edge to run. The reasons the others were excluded are "
-            f"in {output_dir / 'prep_report.json'}."
-        )
-
     report = SeriesPrepReport(
         name=request.name,
         directory=output_dir,
@@ -284,6 +277,14 @@ def prepare_series(
         provenance=collect_provenance(),
     )
     report.write(output_dir / "prep_report.json")
+
+    if len(placements) < 2:
+        raise InputValidationError(
+            f"{request.name}: only the reference ligand '{reference_spec.name}' could be "
+            "placed, so there is no edge to run. The reasons the others were excluded are "
+            f"in {output_dir / 'prep_report.json'}."
+        )
+
     logger.info(
         "Prepared series '%s': %d ligand(s) placed, %d excluded",
         request.name,
