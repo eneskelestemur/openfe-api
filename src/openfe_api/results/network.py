@@ -335,13 +335,13 @@ def _fit(edges: list[EdgeResult]) -> tuple[list[LigandEstimate], list[CycleClosu
             uncertainty=float(row["uncertainty (kcal/mol)"]),
             degree=degrees.get(str(row["label"]), 0),
         )
-        for _, row in frame.iterrows()
+        for row in frame.to_dict(orient="records")
         if str(row["source"]).startswith("MLE")
     ]
 
     cycles: list[CycleClosure] = []
     closure_frame = femap.get_cycle_closure_dataframe()
-    for _, row in closure_frame.iterrows():
+    for row in closure_frame.to_dict(orient="records"):
         cycles.append(
             CycleClosure(
                 ligands=tuple(str(name) for name in row["cycle"]),
