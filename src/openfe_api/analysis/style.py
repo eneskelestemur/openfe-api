@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["DARK", "LIGHT", "Theme", "rc_params", "theme_for"]
+__all__ = ["DARK", "LIGHT", "Theme", "style_axes", "theme_for"]
 
 
 @dataclass(frozen=True)
@@ -77,35 +77,24 @@ def theme_for(dark: bool) -> Theme:
     return DARK if dark else LIGHT
 
 
-def rc_params(theme: Theme) -> dict[str, Any]:
-    """Return the matplotlib settings that put a theme on a figure.
+def style_axes(axes: Any, theme: Theme) -> None:
+    """Put a theme on one set of axes.
+
+    Applied per figure rather than through matplotlib's global settings, because the
+    service draws inside a background thread and those settings are shared.
 
     Args:
+        axes: The axes to style.
         theme: The colours to apply.
-
-    Returns:
-        Settings to pass to ``matplotlib.rc_context``.
     """
-    return {
-        "figure.facecolor": theme.surface,
-        "axes.facecolor": theme.surface,
-        "savefig.facecolor": theme.surface,
-        "axes.edgecolor": theme.axis,
-        "axes.labelcolor": theme.secondary_ink,
-        "axes.titlecolor": theme.primary_ink,
-        "axes.grid": True,
-        "axes.axisbelow": True,
-        "grid.color": theme.grid,
-        "grid.linewidth": 0.8,
-        "xtick.color": theme.muted_ink,
-        "ytick.color": theme.muted_ink,
-        "xtick.labelcolor": theme.muted_ink,
-        "ytick.labelcolor": theme.muted_ink,
-        "text.color": theme.primary_ink,
-        "font.family": "sans-serif",
-        "font.size": 9,
-        "axes.titlesize": 11,
-        "axes.labelsize": 9,
-        "legend.frameon": False,
-        "figure.dpi": 160,
-    }
+    axes.set_facecolor(theme.surface)
+    axes.grid(True, color=theme.grid, linewidth=0.7, zorder=0)
+    axes.set_axisbelow(True)
+    for side in ("top", "right"):
+        axes.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        axes.spines[side].set_color(theme.axis)
+        axes.spines[side].set_linewidth(0.8)
+    axes.tick_params(colors=theme.muted_ink, labelsize=8, length=3, width=0.8)
+    axes.xaxis.label.set_color(theme.secondary_ink)
+    axes.yaxis.label.set_color(theme.secondary_ink)

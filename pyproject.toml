@@ -20,6 +20,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Chemistry",
 ]
 dependencies = [
+    "matplotlib>=3.8",
     "pydantic>=2.9",
     "pydantic-settings>=2.4",
     "typer>=0.12",
@@ -92,6 +93,9 @@ select = [
 # BLE001 is deliberately not selected. Preparation and planning call into RDKit, gufe and
 # OpenFE, which raise whatever they like, so those calls catch broadly and re-raise a named
 # error of our own; narrowing would leak third-party exception types to the caller.
+
+# Standard notation in this field, and a figure that spells them out reads worse.
+allowed-confusables = ["\u03c1", "\u03c4"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

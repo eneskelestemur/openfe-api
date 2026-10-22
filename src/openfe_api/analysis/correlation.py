@@ -170,8 +170,15 @@ def correlate(
     predicted = np.array([by_name[name].dg for name in shared], dtype=float)
     measured = np.array([measurements[name].dg for name in shared], dtype=float)
     if centered:
-        predicted = predicted - predicted.mean()
+        # The unpaired predictions move by the same offset, so every predicted value stays
+        # on one axis and a ligand without a measurement is still placed against the rest.
+        shift = float(predicted.mean())
+        predicted = predicted - shift
         measured = measured - measured.mean()
+        outcome.predicted_only = [
+            Prediction(entry.name, entry.dg - shift, entry.uncertainty)
+            for entry in outcome.predicted_only
+        ]
 
     outcome.paired = [
         PairedPoint(

@@ -13,6 +13,7 @@ dependencies:
   - pdbfixer
   - rdkit
   - mdanalysis
+  - matplotlib-base
   - openff-nagl
   - ambertools
   - pydantic>=2.9
