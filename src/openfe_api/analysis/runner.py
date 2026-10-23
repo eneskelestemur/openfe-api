@@ -7,6 +7,8 @@ mark finished runs done as a side effect.
 from __future__ import annotations
 
 import json
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from openfe_api.analysis.style import Theme, theme_for
 from openfe_api.analysis.trajectory import (
     RepeatMetrics,
     RunStability,
+    TrajectorySource,
     find_sources,
     measure_repeat,
     summarize_run,
@@ -193,7 +196,42 @@ def _write_metrics(outcome: Correlation, path: Path) -> Path:
     return path
 
 
-def measure_trajectories(campaign: Campaign) -> tuple[list[RepeatMetrics], list[str]]:
+def _work_items(campaign: Campaign) -> list[tuple[TrajectorySource, str, int]]:
+    """List every trajectory to measure, with the run and repeat it belongs to."""
+    runs = campaign.directory / RUNS_DIR
+    if not runs.is_dir():
+        return []
+
+    items: list[tuple[TrajectorySource, str, int]] = []
+    seen: set[Path] = set()
+    for pattern in _REPEAT_GLOBS:
+        for repeat_dir in sorted(runs.glob(pattern)):
+            if repeat_dir in seen or not repeat_dir.is_dir():
+                continue
+            seen.add(repeat_dir)
+            run = repeat_dir.relative_to(runs).parts[0]
+            repeat = int(repeat_dir.name.removeprefix("repeat"))
+            items += [(source, run, repeat) for source in find_sources(repeat_dir)]
+    return items
+
+
+def _measure_one(
+    item: tuple[TrajectorySource, str, int],
+) -> tuple[list[RepeatMetrics], str | None]:
+    """Measure one trajectory, returning the failure instead of raising it.
+
+    A worker process cannot let an exception escape without taking the pool down with it.
+    """
+    source, run, repeat = item
+    try:
+        return measure_repeat(source, run, repeat), None
+    except OpenFEAPIError as error:
+        return [], str(error)
+
+
+def measure_trajectories(
+    campaign: Campaign, workers: int = 1
+) -> tuple[list[RepeatMetrics], list[str]]:
     """Measure every repeat of every run that produced a trajectory.
 
     A repeat that cannot be measured is reported and the rest carry on: a short or
@@ -201,31 +239,33 @@ def measure_trajectories(campaign: Campaign) -> tuple[list[RepeatMetrics], list[
 
     Args:
         campaign: The campaign to read.
+        workers: How many trajectories to measure at once. A worker spends a couple of
+            seconds starting, so more of them only pays where each trajectory takes
+            minutes, which is the production case rather than a smoke test.
 
     Returns:
         Every repeat measured, and a message for each one that could not be.
     """
-    runs = campaign.directory / RUNS_DIR
+    items = _work_items(campaign)
+    if not items:
+        return [], []
+
+    if workers <= 1:
+        outcomes = [_measure_one(item) for item in items]
+    else:
+        # Spawned rather than forked: the readers hold netCDF and HDF5 handles, which do not
+        # survive a fork reliably.
+        context = multiprocessing.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+            outcomes = list(pool.map(_measure_one, items))
+
     measured: list[RepeatMetrics] = []
     skipped: list[str] = []
-    if not runs.is_dir():
-        return measured, skipped
-
-    seen: set[Path] = set()
-    for pattern in _REPEAT_GLOBS:
-        for repeat_dir in sorted(runs.glob(pattern)):
-            if repeat_dir in seen or not repeat_dir.is_dir():
-                continue
-            seen.add(repeat_dir)
-            relative = repeat_dir.relative_to(runs)
-            run = relative.parts[0]
-            repeat = int(repeat_dir.name.removeprefix("repeat"))
-            for source in find_sources(repeat_dir):
-                try:
-                    measured += measure_repeat(source, run, repeat)
-                except OpenFEAPIError as error:
-                    skipped.append(str(error))
-                    logger.warning("Skipped %s: %s", source.trajectory.name, error)
+    for metrics, failure in outcomes:
+        measured += metrics
+        if failure is not None:
+            skipped.append(failure)
+            logger.warning("Skipped a trajectory: %s", failure)
 
     return measured, skipped
 
@@ -289,6 +329,7 @@ def analyze_campaign(
     measurements: Path | dict[str, Measurement] | None = None,
     dark: bool = False,
     trajectories: bool = False,
+    workers: int = 1,
 ) -> AnalysisOutcome:
     """Read a campaign's results and write its analysis.
 
@@ -299,6 +340,7 @@ def analyze_campaign(
         dark: Whether to draw the figures for a dark surface.
         trajectories: Whether to measure how far each ligand moved during its run. This
             reads the trajectories, which takes far longer than the rest of the analysis.
+        workers: How many trajectories to measure at once.
 
     Returns:
         What was written, and the metrics behind it.
@@ -335,7 +377,7 @@ def analyze_campaign(
         outcome.figures.setdefault(f"{plot.run}_{plot.kind}", plot.link)
 
     if trajectories:
-        _add_trajectories(campaign, outcome, theme, directory)
+        _add_trajectories(campaign, outcome, theme, directory, workers)
 
     if measurements is None or not predictions:
         logger.info("Analyzed '%s': %d ligand(s), no measured values", name, len(predictions))
@@ -370,10 +412,10 @@ def analyze_campaign(
 
 
 def _add_trajectories(
-    campaign: Campaign, outcome: AnalysisOutcome, theme: Theme, directory: Path
+    campaign: Campaign, outcome: AnalysisOutcome, theme: Theme, directory: Path, workers: int
 ) -> None:
     """Measure the trajectories and write what they show into the analysis."""
-    metrics, skipped = measure_trajectories(campaign)
+    metrics, skipped = measure_trajectories(campaign, workers)
     outcome.warnings += skipped
     if not metrics:
         outcome.warnings.append("no trajectory could be measured")

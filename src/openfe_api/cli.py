@@ -813,6 +813,16 @@ def analyze(
             "minutes rather than seconds.",
         ),
     ] = False,
+    workers: Annotated[
+        int,
+        typer.Option(
+            "--workers",
+            min=1,
+            help="Trajectories to measure at once. Worth raising for production-length runs, "
+            "where each trajectory takes minutes; a worker costs a couple of seconds to "
+            "start, so it loses on short ones.",
+        ),
+    ] = 1,
 ) -> None:
     """Write a campaign's figures and tables, without changing the campaign.
 
@@ -824,11 +834,16 @@ def analyze(
         measured: Table of measured free energies to compare against.
         dark: Whether to draw for a dark background.
         trajectories: Whether to measure ligand and protein movement as well.
+        workers: How many trajectories to measure at once.
     """
     try:
         campaign = Campaign.open(campaign_dir)
         outcome = analyze_campaign(
-            campaign, measurements=measured, dark=dark, trajectories=trajectories
+            campaign,
+            measurements=measured,
+            dark=dark,
+            trajectories=trajectories,
+            workers=workers,
         )
     except OpenFEAPIError as error:
         _fail(error)

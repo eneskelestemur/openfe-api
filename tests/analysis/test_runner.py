@@ -18,7 +18,11 @@ from helpers import (
     write_result,
 )
 from openfe_api.analysis.experimental import Measurement
-from openfe_api.analysis.runner import analyze_campaign, read_predictions
+from openfe_api.analysis.runner import (
+    analyze_campaign,
+    measure_trajectories,
+    read_predictions,
+)
 from openfe_api.campaign import Campaign, RunState
 from openfe_api.exceptions import InputValidationError, OpenFEAPIError
 from openfe_api.schema.request import validate_request
@@ -208,11 +212,14 @@ def _measurable(campaign: Campaign, run: str, repeats: int) -> None:
         shared.mkdir(parents=True, exist_ok=True)
         topology = write_mini_pdb(shared / "equil_npt.pdb", protein=4, ligands=1)
         universe = mda.Universe(topology)
-        atoms = universe.select_atoms("all")
-        with mda.Writer(str(shared / "simulation.xtc"), n_atoms=len(atoms)) as writer:
-            for shift in (0.0, 0.5):
-                atoms.positions = atoms.positions + shift
-                writer.write(atoms)
+        try:
+            atoms = universe.select_atoms("all")
+            with mda.Writer(str(shared / "simulation.xtc"), n_atoms=len(atoms)) as writer:
+                for shift in (0.0, 0.5):
+                    atoms.positions = atoms.positions + shift
+                    writer.write(atoms)
+        finally:
+            universe.trajectory.close()
 
 
 def test_trajectories_are_left_alone_unless_asked_for(tmp_path: Path) -> None:
@@ -260,3 +267,29 @@ def test_a_repeat_that_cannot_be_measured_is_reported_not_fatal(tmp_path: Path) 
 
     assert outcome.stability
     assert outcome.tables["trajectory"].is_file()
+
+
+@pytest.mark.parametrize("workers", [1, 2], ids=["serial", "parallel"])
+def test_measuring_gives_the_same_answer_in_parallel(tmp_path: Path, workers: int) -> None:
+    """Workers only change how long it takes, never what it says."""
+    campaign = _finished_abfe(tmp_path)
+    _measurable(campaign, "mini", repeats=2)
+
+    metrics, skipped = measure_trajectories(campaign, workers=workers)
+
+    assert skipped == []
+    assert sorted((entry.run, entry.repeat) for entry in metrics) == [("mini", 1), ("mini", 2)]
+    assert all(entry.times_ps for entry in metrics)
+
+
+def test_a_failure_in_one_worker_does_not_take_the_pool_down(tmp_path: Path) -> None:
+    campaign = _finished_abfe(tmp_path)
+    _measurable(campaign, "mini", repeats=1)
+    broken = campaign.directory / "runs" / "mini" / "repeat2" / "shared_SimUnit-abc_attempt_0"
+    broken.mkdir(parents=True)
+    write_mini_pdb(broken / "equil_npt.pdb", protein=2)
+    (broken / "simulation.xtc").write_bytes(b"not a trajectory")
+
+    metrics, _ = measure_trajectories(campaign, workers=2)
+
+    assert [entry.repeat for entry in metrics] == [1]

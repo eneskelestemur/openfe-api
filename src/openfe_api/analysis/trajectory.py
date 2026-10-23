@@ -167,7 +167,8 @@ def find_sources(repeat_dir: Path) -> list[TrajectorySource]:
 
     for dataset in sorted(repeat_dir.glob("shared_*/*.xtc")):
         try:
-            atoms = XTCReader(str(dataset)).n_atoms
+            with XTCReader(str(dataset)) as reader:
+                atoms = reader.n_atoms
         except OSError as error:
             logger.warning("Could not read %s: %s", dataset.name, error)
             continue
@@ -224,6 +225,16 @@ def measure_repeat(source: TrajectorySource, run: str, repeat: int) -> list[Repe
         One entry per ligand, or a single protein-only entry for a system with no ligand.
     """
     universe = _open(source)
+    try:
+        return _measure(universe, source, run, repeat)
+    finally:
+        universe.trajectory.close()
+
+
+def _measure(
+    universe: mda.Universe, source: TrajectorySource, run: str, repeat: int
+) -> list[RepeatMetrics]:
+    """Measure an open trajectory."""
     backbone = universe.select_atoms(BACKBONE_SELECTION)
     protein_rmsd = (
         [float(value) for value in RMSDAnalysis(backbone, superposition=True).run().results["rmsd"]]
