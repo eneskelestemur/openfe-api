@@ -112,6 +112,18 @@ campaign = Campaign.create(Path("./my_campaign"), request)
 
 ::: openfe_api.files
 
+## Analysis
+
+::: openfe_api.analysis.experimental
+
+::: openfe_api.analysis.correlation
+
+::: openfe_api.analysis.figures
+
+::: openfe_api.analysis.style
+
+::: openfe_api.analysis.runner
+
 ## Supporting modules
 
 ::: openfe_api.config

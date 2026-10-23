@@ -675,3 +675,86 @@ def test_simulation_artifacts_are_paths_a_client_can_fetch(
     (campaign.directory / trajectory).parent.mkdir(parents=True, exist_ok=True)
     (campaign.directory / trajectory).write_bytes(b"frames")
     assert client.get(f"/campaigns/svc_md/files/{trajectory}").content == b"frames"
+
+
+def _finished_abfe_campaign(client: TestClient, tmp_path: Path) -> Campaign:
+    """Create an ABFE campaign through the service and give it one finished result."""
+    client.post("/campaigns", json=_request_body())
+    campaign = Campaign.open(tmp_path / "campaigns" / "svc_campaign")
+    campaign.set_state("mini", RunState.PREPARED)
+    campaign.set_state("mini", RunState.PLANNED)
+    write_result(campaign.directory / "runs" / "mini" / "repeat1" / "results.json", estimate=-9.4)
+    return campaign
+
+
+def test_analysis_reports_the_ranking_without_measurements(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _finished_abfe_campaign(client, tmp_path)
+
+    body = client.post("/campaigns/svc_campaign/analysis", json={}).json()
+
+    assert body["ligands"] == 1
+    assert body["paired"] == 0
+    assert body["files"]["ranking"].startswith("analysis/")
+
+
+def test_analysis_reports_metrics_against_measurements(client: TestClient, tmp_path: Path) -> None:
+    _finished_abfe_campaign(client, tmp_path)
+
+    body = client.post("/campaigns/svc_campaign/analysis", json={"measured": {"mini": -9.0}}).json()
+
+    assert body["paired"] == 1
+    assert body["aligned"] is False
+    assert "correlation" in body["files"]
+
+
+def test_a_measurement_may_carry_an_uncertainty(client: TestClient, tmp_path: Path) -> None:
+    _finished_abfe_campaign(client, tmp_path)
+
+    response = client.post(
+        "/campaigns/svc_campaign/analysis",
+        json={"measured": {"mini": {"dg": -9.0, "uncertainty": 0.3}}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["paired"] == 1
+
+
+def test_analysis_files_are_fetchable(client: TestClient, tmp_path: Path) -> None:
+    """The paths it reports go straight into the download endpoint."""
+    _finished_abfe_campaign(client, tmp_path)
+
+    body = client.post("/campaigns/svc_campaign/analysis", json={}).json()
+    fetched = client.get(f"/campaigns/svc_campaign/files/{body['files']['predictions']}")
+
+    assert fetched.status_code == 200
+    assert b"mini" in fetched.content
+
+
+def test_analysis_does_not_move_the_campaign_on(client: TestClient, tmp_path: Path) -> None:
+    campaign = _finished_abfe_campaign(client, tmp_path)
+
+    client.post("/campaigns/svc_campaign/analysis", json={})
+
+    assert Campaign.open(campaign.directory).run("mini").state is not RunState.DONE
+
+
+def test_analysing_a_campaign_with_nothing_finished_is_refused(
+    client: TestClient, tmp_path: Path
+) -> None:
+    client.post("/campaigns", json=_request_body())
+
+    response = client.post("/campaigns/svc_campaign/analysis", json={})
+
+    assert response.status_code == 422
+    assert "no finished results" in response.text
+
+
+def test_analysing_a_plain_md_campaign_is_refused(client: TestClient, tmp_path: Path) -> None:
+    client.post("/campaigns", json=_md_body())
+
+    response = client.post("/campaigns/svc_md/analysis", json={})
+
+    assert response.status_code == 409
+    assert "no free energy" in response.text

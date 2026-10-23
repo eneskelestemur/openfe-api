@@ -23,6 +23,7 @@ from openfe_api.provenance import collect_provenance
 from openfe_api.schema.request import CampaignRequest
 
 __all__ = [
+    "ANALYSIS_DIR",
     "INPUTS_DIR",
     "LOGS_DIR",
     "MANIFEST_NAME",
@@ -43,6 +44,7 @@ logger = get_logger(__name__)
 MANIFEST_NAME = "manifest.json"
 SCHEMA_VERSION = 1
 
+ANALYSIS_DIR = "analysis"
 INPUTS_DIR = "inputs"
 PREPARED_DIR = "prepared"
 PLANS_DIR = "plans"
@@ -58,6 +60,7 @@ SUBDIRECTORIES = (
     RUNS_DIR,
     RELAXED_DIR,
     RESULTS_DIR,
+    ANALYSIS_DIR,
     LOGS_DIR,
 )
 """Every directory a campaign may hold, in the order the stages fill them."""

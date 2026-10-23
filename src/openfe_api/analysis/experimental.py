@@ -1,8 +1,7 @@
 """Reading the measured free energies a campaign is compared against.
 
-Values are read in kcal/mol and used as given. Converting an IC50 or a Kd into a free
-energy rests on assumptions this project does not make for you, so the table has to arrive
-already in that form.
+Values are read in kcal/mol and used as given: converting an IC50 or a Kd rests on
+assumptions this project does not make for you.
 """
 
 from __future__ import annotations
@@ -61,9 +60,9 @@ def _number(raw: str, name: str, column: str, path: Path) -> float:
 def read_measurements(path: Path) -> dict[str, Measurement]:
     """Read a table of measured free energies.
 
-    The table is a CSV or TSV with a ligand name column (``name`` or ``ligand``), a value
-    column in kcal/mol (``dg``, ``dg (kcal/mol)``, ``experimental`` or ``experimental_dg``)
-    and optionally an uncertainty column. Column names are matched ignoring case.
+    A CSV or TSV with a ligand name column (``name``, ``ligand``), a value column in
+    kcal/mol (``dg``, ``dg (kcal/mol)``, ``experimental``, ``experimental_dg``) and an
+    optional uncertainty column, matched ignoring case.
 
     Args:
         path: The table to read.

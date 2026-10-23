@@ -31,9 +31,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from openfe_api import __version__
+from openfe_api.analysis.experimental import Measurement
+from openfe_api.analysis.runner import analyze_campaign
 from openfe_api.campaign import INPUTS_DIR, MANIFEST_NAME, Campaign
 from openfe_api.config import ServiceSettings, get_settings
-from openfe_api.exceptions import CampaignStateError, OpenFEAPIError
+from openfe_api.exceptions import CampaignStateError, InputValidationError, OpenFEAPIError
 from openfe_api.execution.runner import load_profile, submit_campaign
 from openfe_api.files import DEFAULT_GROUPS, archive_size, list_files, resolve_file, stream_archive
 from openfe_api.log import get_logger
@@ -339,6 +341,63 @@ class CampaignFileSummary(BaseModel):
     group: str
     size: int
     modified: datetime
+
+
+class MeasuredValue(BaseModel):
+    """One measured free energy.
+
+    Attributes:
+        dg: Measured free energy in kcal/mol.
+        uncertainty: Measurement error in kcal/mol, if known.
+    """
+
+    dg: float
+    uncertainty: float | None = None
+
+
+class AnalysisRequest(BaseModel):
+    """What to analyze a campaign against.
+
+    Attributes:
+        measured: Measured free energies in kcal/mol, keyed by ligand name. A bare number
+            is accepted where there is no uncertainty to give.
+        dark: Whether to draw the figures for a dark background.
+    """
+
+    measured: dict[str, float | MeasuredValue] = Field(default_factory=dict)
+    dark: bool = False
+
+
+class AnalysisSummary(BaseModel):
+    """What an analysis produced.
+
+    Attributes:
+        protocol: The campaign's protocol.
+        ligands: Ligands with a calculated free energy.
+        paired: Ligands that also had a measurement.
+        aligned: Whether the predictions were shifted onto the measured mean.
+        shift: The shift applied to every prediction, in kcal/mol.
+        pearson: Pearson correlation, when enough ligands paired up.
+        spearman: Spearman rank correlation.
+        kendall: Kendall rank correlation.
+        mue: Mean unsigned error in kcal/mol.
+        rmse: Root mean square error in kcal/mol.
+        files: What was written, keyed by what it holds, as paths inside the campaign.
+        warnings: Concerns the reader should know about.
+    """
+
+    protocol: str
+    ligands: int
+    paired: int
+    aligned: bool
+    shift: float | None = None
+    pearson: float | None = None
+    spearman: float | None = None
+    kendall: float | None = None
+    mue: float | None = None
+    rmse: float | None = None
+    files: dict[str, str] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class SimulationSummary(BaseModel):
@@ -864,6 +923,63 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             stream_archive(campaign, found, compress=compress),
             media_type="application/gzip" if compress else "application/x-tar",
             headers=headers,
+        )
+
+    @application.post("/campaigns/{name}/analysis")
+    def analyze(name: str, body: AnalysisRequest, settings: SettingsDep) -> AnalysisSummary:
+        """Write a campaign's figures and tables and report the metrics.
+
+        Answered in the request rather than in the background: an analysis reads results
+        that are already on disk and takes about a second, and it changes nothing, so it can
+        be repeated with new measured values as often as you like. The files it writes are
+        fetchable from the campaign's ``analysis`` group.
+
+        Args:
+            name: Campaign name.
+            body: Measured values to compare against, and the figure background.
+            settings: Service settings.
+
+        Returns:
+            The metrics and the paths of everything written.
+
+        Raises:
+            HTTPException: 404 if the campaign is unknown, 409 if its protocol produces no
+                free energy, 422 if there is nothing gathered to analyze.
+        """
+        campaign = _open_campaign(name, settings)
+        measurements = {
+            ligand: Measurement(
+                ligand,
+                value.dg if isinstance(value, MeasuredValue) else value,
+                value.uncertainty if isinstance(value, MeasuredValue) else None,
+            )
+            for ligand, value in body.measured.items()
+        }
+
+        try:
+            outcome = analyze_campaign(campaign, measurements or None, dark=body.dark)
+        except InputValidationError as error:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+        except OpenFEAPIError as error:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+
+        correlation = outcome.correlation
+        return AnalysisSummary(
+            protocol=outcome.protocol,
+            ligands=len(outcome.predictions),
+            paired=len(correlation.paired) if correlation else 0,
+            aligned=correlation.aligned if correlation else False,
+            shift=correlation.shift if correlation else None,
+            pearson=correlation.pearson if correlation else None,
+            spearman=correlation.spearman if correlation else None,
+            kendall=correlation.kendall if correlation else None,
+            mue=correlation.mue if correlation else None,
+            rmse=correlation.rmse if correlation else None,
+            files={
+                label: _campaign_relative(campaign, path)
+                for label, path in (*outcome.figures.items(), *outcome.tables.items())
+            },
+            warnings=outcome.warnings,
         )
 
     @application.get("/campaigns/{name}/network")

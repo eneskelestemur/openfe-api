@@ -44,6 +44,7 @@ openfe-api status ./smoke
 | `plan` | Assigns charges, writes transformations, estimates cost | seconds to minutes |
 | `submit` | Runs or queues every repeat | hours to days |
 | `gather` | Collects results and checks convergence | seconds |
+| `analyze` | Writes figures and tables from what was gathered | seconds |
 
 `relax` only applies to a request that sets `relax.enabled`; see
 [plain MD and relaxation](md.md). Every stage records what it did in the campaign directory,
@@ -61,6 +62,7 @@ my_campaign/
 ├── runs/<run>/repeatN/  working directory, results.json, quickrun.log
 ├── relaxed/<name>/      the optional relaxation: its input, frame and report
 ├── results/             results.tsv for ABFE, edges.tsv and ligands.tsv for a network
+├── analysis/            figures, their tables and the metrics
 ├── logs/                scheduler logs
 └── submit_<class>.sh    the generated batch script, one per cost class
 ```

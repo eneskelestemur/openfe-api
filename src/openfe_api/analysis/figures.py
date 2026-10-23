@@ -1,8 +1,7 @@
 """The figures an analysis writes.
 
-Drawing goes through matplotlib's object interface rather than pyplot: the service runs an
-analysis in a background thread, and pyplot keeps global state that two of them would share.
-Every figure has its numbers written beside it, so a reader never depends on the picture.
+Drawing goes through matplotlib's object interface rather than pyplot, whose global state
+two analyses in background threads would share.
 """
 
 from __future__ import annotations
@@ -12,6 +11,8 @@ from pathlib import Path
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+from matplotlib.gridspec import GridSpec
+from matplotlib.lines import Line2D
 
 from openfe_api.analysis.correlation import Correlation, Prediction
 from openfe_api.analysis.style import Theme, style_axes
@@ -31,18 +32,10 @@ LABEL_LIMIT = 12
 
 
 def _save(figure: Figure, path: Path) -> Path:
-    """Render a figure to disk.
-
-    Args:
-        figure: The figure to write.
-        path: Where to write it.
-
-    Returns:
-        The path written.
-    """
+    """Render a figure to disk and return where it went."""
     path.parent.mkdir(parents=True, exist_ok=True)
     FigureCanvasAgg(figure)
-    # The figure's own colour, not the matplotlib default, or a dark figure is saved with a
+    # The figure's own color, not the matplotlib default, or a dark figure is saved with a
     # white border around it.
     figure.savefig(path, bbox_inches="tight", facecolor=figure.get_facecolor())
     logger.info("Wrote %s", path)
@@ -68,13 +61,12 @@ def _metrics_text(outcome: Correlation) -> str:
 def correlation_figure(outcome: Correlation, title: str, theme: Theme, path: Path) -> Path:
     """Draw predicted against measured free energies.
 
-    Ligands with no measurement are drawn in their own narrow panel on the right, at their
-    predicted value, so a campaign is never reduced to only the subset that has data.
+    Ligands with no measurement are drawn at their predicted value in a panel on the right.
 
     Args:
         outcome: The paired points, the unpaired predictions and the metrics.
         title: Figure title, usually the campaign name.
-        theme: The colours to draw with.
+        theme: The colors to draw with.
         path: Where to write the figure.
 
     Returns:
@@ -139,7 +131,7 @@ def correlation_figure(outcome: Correlation, title: str, theme: Theme, path: Pat
     axes.set_aspect("equal", adjustable="box")
     axes.set_xlabel("Measured ΔG (kcal/mol)")
     axes.set_ylabel("Predicted ΔG (kcal/mol)")
-    subtitle = "both axes centred on their mean" if outcome.centered else ""
+    subtitle = "predictions shifted onto the measured mean" if outcome.aligned else ""
     axes.set_title(title, color=theme.primary_ink, loc="left", pad=20 if subtitle else 10)
     if subtitle:
         axes.text(
@@ -166,12 +158,12 @@ def correlation_figure(outcome: Correlation, title: str, theme: Theme, path: Pat
             linespacing=1.5,
         )
         axes.text(
-            0.96,
+            0.04,
             0.04,
             f"shaded: within {TOLERANCE:.0f} kcal/mol",
             transform=axes.transAxes,
             va="bottom",
-            ha="right",
+            ha="left",
             fontsize=7.5,
             color=theme.muted_ink,
         )
@@ -179,19 +171,77 @@ def correlation_figure(outcome: Correlation, title: str, theme: Theme, path: Pat
     if has_rail:
         _draw_rail(figure, axes_grid, outcome.predicted_only, limits, theme)
 
+    # A legend only once there are two kinds of mark to tell apart; with one the title says it.
+    if outcome.paired and has_rail:
+        axes.legend(
+            handles=[
+                Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="none",
+                    markersize=6,
+                    markerfacecolor=theme.measured,
+                    markeredgecolor=theme.surface,
+                    label="measured",
+                ),
+                Line2D(
+                    [],
+                    [],
+                    marker="o",
+                    linestyle="none",
+                    markersize=6,
+                    markerfacecolor="none",
+                    markeredgecolor=theme.predicted_only,
+                    label="no measurement",
+                ),
+            ],
+            loc="lower right",
+            fontsize=7.5,
+            labelcolor=theme.secondary_ink,
+            handletextpad=0.5,
+            borderpad=0.8,
+            # Backed in the surface color, or the default light box hides the labels on a
+            # dark figure and the band shows through on a light one.
+            frameon=True,
+            facecolor=theme.surface,
+            edgecolor=theme.axis,
+            framealpha=1.0,
+        )
+
     return _save(figure, path)
 
 
-def _spread_labels(values: np.ndarray, span: float) -> list[float]:
-    """Nudge label positions apart so neighbouring names stay readable.
+def _jitter(values: np.ndarray, span: float) -> np.ndarray:
+    """Offset marks sideways so neighbors in the rail stop sitting on each other.
 
-    Args:
-        values: Where each label would sit, in data coordinates.
-        span: Height of the axis in data coordinates.
-
-    Returns:
-        A position per label, in the order given.
+    Deterministic, so the same campaign always draws the same figure.
     """
+    close = 0.06 * span
+    order = np.argsort(values)
+    offsets = np.zeros(values.size)
+    group: list[int] = []
+    for index in order:
+        if group and values[index] - values[group[-1]] > close:
+            _spread_group(group, offsets)
+            group = []
+        group.append(int(index))
+    _spread_group(group, offsets)
+    return offsets
+
+
+def _spread_group(group: list[int], offsets: np.ndarray) -> None:
+    """Spread one cluster of marks evenly across the rail."""
+    if len(group) < 2:
+        return
+    width = min(0.30, 0.09 * len(group))
+    steps = np.linspace(-width, width, len(group))
+    for position, index in zip(steps, group, strict=True):
+        offsets[index] = position
+
+
+def _spread_labels(values: np.ndarray, span: float) -> list[float]:
+    """Nudge label positions apart so neighboring names stay readable."""
     minimum = 0.035 * span
     order = np.argsort(values)
     placed = values.astype(float).copy()
@@ -204,13 +254,13 @@ def _spread_labels(values: np.ndarray, span: float) -> list[float]:
 
 def _draw_rail(
     figure: Figure,
-    axes_grid: object,
+    axes_grid: GridSpec,
     entries: list[Prediction],
     limits: tuple[float, float],
     theme: Theme,
 ) -> None:
     """Draw the ligands that have a prediction but nothing to compare it against."""
-    rail = figure.add_subplot(axes_grid[0, 1])  # type: ignore[index]
+    rail = figure.add_subplot(axes_grid[0, 1])
     style_axes(rail, theme)
     rail.grid(False)
     rail.set_facecolor(theme.band)
@@ -221,8 +271,9 @@ def _draw_rail(
     rail.spines["bottom"].set_visible(False)
 
     values = np.array([entry.dg for entry in entries], dtype=float)
+    offsets = _jitter(values, limits[1] - limits[0])
     rail.errorbar(
-        np.zeros(values.size),
+        offsets,
         values,
         yerr=[entry.uncertainty for entry in entries],
         fmt="none",
@@ -231,7 +282,7 @@ def _draw_rail(
         alpha=0.55,
     )
     rail.scatter(
-        np.zeros(values.size),
+        offsets,
         values,
         s=MARKER_SIZE,
         facecolor="none",
@@ -261,7 +312,7 @@ def ranking_figure(predictions: list[Prediction], title: str, theme: Theme, path
     Args:
         predictions: The calculated free energies.
         title: Figure title, usually the campaign name.
-        theme: The colours to draw with.
+        theme: The colors to draw with.
         path: Where to write the figure.
 
     Returns:

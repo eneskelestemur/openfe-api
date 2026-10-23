@@ -8,6 +8,27 @@ All notable changes to this project are recorded here. The format follows
 
 Nothing yet.
 
+## [0.2.0] - 2026-10-22
+
+### Added
+
+- `openfe-api analyze` and `POST /campaigns/{name}/analysis` write a campaign's figures and
+  tables into `analysis/`. Read-only and repeatable: it never changes run states.
+- For a relative protocol the predictions are shifted onto the measured mean, so the measured
+  axis keeps real free energies. The shift is recorded.
+- A correlation figure against measured free energies, with Pearson, Spearman, Kendall,
+  MUE and RMSE, and a ranking figure for a campaign with nothing to compare against.
+  Ligands with a prediction but no measurement are shown beside the correlation rather
+  than dropped.
+- Measured values are read from a CSV or TSV in kcal/mol. No affinity conversion is done:
+  a ΔG table is required.
+- `--dark` draws the figures for a dark background.
+
+### Changed
+
+- Campaigns gain an `analysis/` directory, served as a file group like the others.
+- matplotlib is a new runtime dependency.
+
 ## [0.1.1] - 2026-10-16
 
 ### Fixed
@@ -75,6 +96,7 @@ First release. This entry describes what the project does.
   front and leaves simulation output out unless asked for.
 - Docker and Apptainer images carrying both entry points.
 
-[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/eneskelestemur/openfe-api/releases/tag/v0.1.0

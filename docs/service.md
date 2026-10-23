@@ -24,6 +24,7 @@ Interactive documentation is served at `/docs`, generated from the same models t
 | `GET` | `/campaigns/{name}/results` | Absolute free energies with quality checks. ABFE only |
 | `GET` | `/campaigns/{name}/network` | Edges, fitted ligand values and cycle closure. RBFE and SepTop |
 | `GET` | `/campaigns/{name}/simulations` | What each repeat produced. Plain MD |
+| `POST` | `/campaigns/{name}/analysis` | Write figures and tables, and report the metrics |
 | `GET` | `/campaigns/{name}/files` | List the files the campaign holds |
 | `GET` | `/campaigns/{name}/files/{path}` | Download one of them |
 | `GET` | `/campaigns/{name}/archive` | Download the campaign as one tar |

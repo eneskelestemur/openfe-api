@@ -33,6 +33,7 @@ nav:
   - Plain MD and relaxation: md.md
   - Execution: execution.md
   - Results: results.md
+  - Analysis: analysis.md
   - Service and container: service.md
   - CLI reference: cli.md
   - API reference: api.md

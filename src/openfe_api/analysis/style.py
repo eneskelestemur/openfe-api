@@ -1,8 +1,7 @@
 """Colors and matplotlib defaults shared by every figure.
 
-The two categorical hues are validated for colour-vision deficiency and for contrast
-against their own surface, in both modes, so a figure never carries meaning in colour alone
-that a reader cannot separate.
+The two categorical hues are validated for color-vision deficiency and for contrast against
+their own surface, in both modes.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ __all__ = ["DARK", "LIGHT", "Theme", "style_axes", "theme_for"]
 
 @dataclass(frozen=True)
 class Theme:
-    """One mode's colours.
+    """One mode's colors.
 
     Attributes:
         surface: Figure and axes background.
@@ -66,7 +65,7 @@ DARK = Theme(
 
 
 def theme_for(dark: bool) -> Theme:
-    """Return the colours for one mode.
+    """Return the colors for one mode.
 
     Args:
         dark: Whether to use the dark surface.
@@ -85,7 +84,7 @@ def style_axes(axes: Any, theme: Theme) -> None:
 
     Args:
         axes: The axes to style.
-        theme: The colours to apply.
+        theme: The colors to apply.
     """
     axes.set_facecolor(theme.surface)
     axes.grid(True, color=theme.grid, linewidth=0.7, zorder=0)

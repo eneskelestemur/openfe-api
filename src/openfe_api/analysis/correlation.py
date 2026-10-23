@@ -1,9 +1,7 @@
 """Comparing predicted free energies against measured ones.
 
-A relative protocol fits its ligands against the network mean, so predictions and
-measurements are each centred on their own mean before they are compared. That shifts both
-axes by a constant, which leaves every correlation untouched and makes the error metrics
-read as the spread around the trend rather than around an arbitrary origin.
+A relative protocol's values carry an arbitrary offset, so predictions are shifted onto the
+measured mean. Only they move, so the measured axis keeps real free energies.
 """
 
 from __future__ import annotations
@@ -41,9 +39,9 @@ class PairedPoint:
 
     Attributes:
         name: Ligand name.
-        predicted: Calculated free energy in kcal/mol, centred for a relative protocol.
+        predicted: Calculated free energy in kcal/mol, shifted for a relative protocol.
         predicted_uncertainty: Its uncertainty in kcal/mol.
-        measured: Measured free energy in kcal/mol, centred the same way.
+        measured: Measured free energy in kcal/mol, exactly as it was given.
         measured_uncertainty: Its uncertainty in kcal/mol, when the table carried one.
     """
 
@@ -62,7 +60,8 @@ class Correlation:
         paired: Ligands carrying both a prediction and a measurement.
         predicted_only: Predictions with nothing to compare against.
         unmatched: Measured ligand names the campaign does not contain.
-        centered: Whether both axes were shifted onto their own mean.
+        aligned: Whether the predictions were shifted onto the measured mean.
+        shift: The shift applied to every prediction, in kcal/mol.
         pearson: Pearson correlation of the paired values.
         spearman: Spearman rank correlation.
         kendall: Kendall rank correlation.
@@ -73,7 +72,8 @@ class Correlation:
     paired: list[PairedPoint] = field(default_factory=list)
     predicted_only: list[Prediction] = field(default_factory=list)
     unmatched: list[str] = field(default_factory=list)
-    centered: bool = False
+    aligned: bool = False
+    shift: float | None = None
     pearson: float | None = None
     spearman: float | None = None
     kendall: float | None = None
@@ -136,14 +136,14 @@ def _kendall(first: np.ndarray, second: np.ndarray) -> float | None:
 def correlate(
     predictions: list[Prediction],
     measurements: dict[str, Measurement],
-    centered: bool,
+    aligned: bool,
 ) -> Correlation:
     """Pair predictions with measurements and score the agreement.
 
     Args:
         predictions: The campaign's calculated free energies.
         measurements: Measured free energies, keyed by ligand name.
-        centered: Whether to shift both axes onto their own mean, which a relative
+        aligned: Whether to shift the predictions onto the measured mean, which a relative
             protocol needs because its values are relative to the network already.
 
     Returns:
@@ -156,7 +156,7 @@ def correlate(
     outcome = Correlation(
         predicted_only=[by_name[name] for name in by_name if name not in measurements],
         unmatched=sorted(name for name in measurements if name not in by_name),
-        centered=centered,
+        aligned=aligned,
     )
     if outcome.unmatched:
         logger.warning(
@@ -169,12 +169,12 @@ def correlate(
 
     predicted = np.array([by_name[name].dg for name in shared], dtype=float)
     measured = np.array([measurements[name].dg for name in shared], dtype=float)
-    if centered:
-        # The unpaired predictions move by the same offset, so every predicted value stays
-        # on one axis and a ligand without a measurement is still placed against the rest.
-        shift = float(predicted.mean())
+    if aligned:
+        # Only the predictions move, so the measured axis keeps real free energies. The
+        # unpaired predictions move with them and stay on the same axis as the rest.
+        shift = float(predicted.mean() - measured.mean())
+        outcome.shift = shift
         predicted = predicted - shift
-        measured = measured - measured.mean()
         outcome.predicted_only = [
             Prediction(entry.name, entry.dg - shift, entry.uncertainty)
             for entry in outcome.predicted_only

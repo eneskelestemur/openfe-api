@@ -77,6 +77,7 @@ openfe-api prep     ./my_campaign                     # build protein, ligand, c
 openfe-api plan     ./my_campaign -p 8                # charges + transformation JSON
 openfe-api submit   ./my_campaign --profiles profiles.yaml
 openfe-api gather   ./my_campaign                     # results + quality checks
+openfe-api analyze  ./my_campaign --measured affinities.csv   # figures + metrics
 openfe-api status   ./my_campaign
 ```
 

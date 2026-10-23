@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from helpers import write_result
+from helpers import abfe_campaign, write_result
 from openfe_api.campaign import MANIFEST_NAME, Campaign, RunState
 from openfe_api.cli import app
 
@@ -427,3 +427,36 @@ def test_gather_reports_when_there_is_nothing(
 
     assert result.exit_code == 1
     assert "No usable results" in result.stdout
+
+
+def test_analyze_writes_the_figures(tmp_path: Path) -> None:
+    campaign = abfe_campaign(tmp_path, repeats=1)
+    write_result(campaign.directory / "runs" / "mini" / "repeat1" / "results.json", estimate=-9.4)
+
+    result = runner.invoke(app, ["analyze", str(campaign.directory)])
+
+    assert result.exit_code == 0, result.output
+    assert (campaign.directory / "analysis" / "ranking.png").is_file()
+    assert (campaign.directory / "analysis" / "predictions.tsv").is_file()
+
+
+def test_analyze_with_measured_values_reports_metrics(tmp_path: Path) -> None:
+    campaign = abfe_campaign(tmp_path, repeats=1)
+    write_result(campaign.directory / "runs" / "mini" / "repeat1" / "results.json", estimate=-9.4)
+    table = tmp_path / "measured.csv"
+    table.write_text("name,dg\nmini,-9.0\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["analyze", str(campaign.directory), "--measured", str(table)])
+
+    assert result.exit_code == 0, result.output
+    assert (campaign.directory / "analysis" / "correlation.png").is_file()
+    assert "ligands compared" in result.output
+
+
+def test_analyze_refuses_a_campaign_with_nothing_finished(tmp_path: Path) -> None:
+    campaign = abfe_campaign(tmp_path, repeats=1)
+
+    result = runner.invoke(app, ["analyze", str(campaign.directory)])
+
+    assert result.exit_code != 0
+    assert "no finished results" in result.output

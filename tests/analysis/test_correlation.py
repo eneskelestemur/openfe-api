@@ -22,7 +22,7 @@ def _measurements(values: dict[str, float]) -> dict[str, Measurement]:
 def test_perfect_agreement_scores_one() -> None:
     values = {"a": -9.0, "b": -8.0, "c": -7.0}
 
-    outcome = correlate(_predictions(values), _measurements(values), centered=False)
+    outcome = correlate(_predictions(values), _measurements(values), aligned=False)
 
     assert outcome.pearson == pytest.approx(1.0)
     assert outcome.spearman == pytest.approx(1.0)
@@ -35,30 +35,44 @@ def test_reversed_ranking_scores_minus_one() -> None:
     predictions = _predictions({"a": -9.0, "b": -8.0, "c": -7.0})
     measurements = _measurements({"a": -7.0, "b": -8.0, "c": -9.0})
 
-    outcome = correlate(predictions, measurements, centered=False)
+    outcome = correlate(predictions, measurements, aligned=False)
 
     assert outcome.pearson == pytest.approx(-1.0)
     assert outcome.kendall == pytest.approx(-1.0)
 
 
-def test_centering_leaves_correlation_alone_but_moves_the_error() -> None:
-    """A relative protocol's values carry an arbitrary offset, which centering removes."""
+def test_aligning_moves_only_the_predictions() -> None:
+    """A relative protocol's values carry an arbitrary offset; the measured axis keeps its own."""
     predictions = _predictions({"a": 1.0, "b": 2.0, "c": 3.0})
     measurements = _measurements({"a": -9.0, "b": -8.0, "c": -7.0})
 
-    raw = correlate(predictions, measurements, centered=False)
-    centered = correlate(predictions, measurements, centered=True)
+    raw = correlate(predictions, measurements, aligned=False)
+    aligned = correlate(predictions, measurements, aligned=True)
 
-    assert raw.pearson == pytest.approx(centered.pearson)
+    assert raw.pearson == pytest.approx(aligned.pearson)
     assert raw.mue == pytest.approx(10.0)
-    assert centered.mue == pytest.approx(0.0)
+    assert aligned.mue == pytest.approx(0.0)
+    assert aligned.shift == pytest.approx(10.0)
+    assert [point.measured for point in aligned.paired] == [-9.0, -8.0, -7.0]
+    assert [point.predicted for point in aligned.paired] == pytest.approx([-9.0, -8.0, -7.0])
+
+
+def test_an_unpaired_prediction_moves_with_the_rest() -> None:
+    """It shares the axis, so it has to take the same shift."""
+    predictions = _predictions({"a": 1.0, "b": 2.0, "c": 3.0, "lonely": 4.0})
+    measurements = _measurements({"a": -9.0, "b": -8.0, "c": -7.0})
+
+    outcome = correlate(predictions, measurements, aligned=True)
+
+    assert outcome.shift == pytest.approx(10.0)
+    assert outcome.predicted_only[0].dg == pytest.approx(-6.0)
 
 
 def test_ligands_without_a_measurement_are_kept_apart() -> None:
     predictions = _predictions({"a": -9.0, "b": -8.0, "c": -7.0})
     measurements = _measurements({"a": -9.0, "b": -8.0})
 
-    outcome = correlate(predictions, measurements, centered=False)
+    outcome = correlate(predictions, measurements, aligned=False)
 
     assert [point.name for point in outcome.paired] == ["a", "b"]
     assert [entry.name for entry in outcome.predicted_only] == ["c"]
@@ -66,7 +80,7 @@ def test_ligands_without_a_measurement_are_kept_apart() -> None:
 
 def test_a_measured_ligand_the_campaign_lacks_is_reported() -> None:
     outcome = correlate(
-        _predictions({"a": -9.0}), _measurements({"a": -9.0, "ghost": -8.0}), centered=False
+        _predictions({"a": -9.0}), _measurements({"a": -9.0, "ghost": -8.0}), aligned=False
     )
 
     assert outcome.unmatched == ["ghost"]
@@ -74,7 +88,7 @@ def test_a_measured_ligand_the_campaign_lacks_is_reported() -> None:
 
 def test_a_single_pair_reports_no_metrics() -> None:
     """One point has no spread to correlate, so a number there would be meaningless."""
-    outcome = correlate(_predictions({"a": -9.0}), _measurements({"a": -9.0}), centered=False)
+    outcome = correlate(_predictions({"a": -9.0}), _measurements({"a": -9.0}), aligned=False)
 
     assert len(outcome.paired) == 1
     assert outcome.pearson is None
@@ -82,7 +96,7 @@ def test_a_single_pair_reports_no_metrics() -> None:
 
 
 def test_nothing_in_common_reports_no_pairs() -> None:
-    outcome = correlate(_predictions({"a": -9.0}), _measurements({"b": -8.0}), centered=False)
+    outcome = correlate(_predictions({"a": -9.0}), _measurements({"b": -8.0}), aligned=False)
 
     assert outcome.paired == []
     assert outcome.pearson is None
@@ -109,7 +123,7 @@ def test_the_statistics_match_scipy() -> None:
     outcome = correlate(
         [Prediction(name, float(dg), 0.2) for name, dg in zip(names, predicted, strict=True)],
         {name: Measurement(name, float(dg)) for name, dg in zip(names, measured, strict=True)},
-        centered=False,
+        aligned=False,
     )
 
     assert outcome.pearson == pytest.approx(scipy_stats.pearsonr(predicted, measured)[0])
@@ -127,7 +141,7 @@ def test_the_statistics_match_scipy_with_ties() -> None:
     outcome = correlate(
         [Prediction(name, float(dg), 0.2) for name, dg in zip(names, predicted, strict=True)],
         {name: Measurement(name, float(dg)) for name, dg in zip(names, measured, strict=True)},
-        centered=False,
+        aligned=False,
     )
 
     assert outcome.spearman == pytest.approx(scipy_stats.spearmanr(predicted, measured)[0])

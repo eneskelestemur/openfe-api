@@ -24,11 +24,11 @@ def _correlation(paired: int = 5, unpaired: int = 0) -> Correlation:
     measurements = {
         entry.name: Measurement(entry.name, entry.dg + 0.2) for entry in predictions[:paired]
     }
-    return correlate(predictions, measurements, centered=False)
+    return correlate(predictions, measurements, aligned=False)
 
 
 def _corner(path: Path) -> list[float]:
-    """Return the colour of the saved figure's top-left pixel."""
+    """Return the color of the saved figure's top-left pixel."""
     pixels = image.imread(path)
     return [float(channel) for channel in pixels[0, 0, :3]]
 

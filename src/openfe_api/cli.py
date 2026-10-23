@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from openfe_api import __version__
+from openfe_api.analysis.runner import analyze_campaign
 from openfe_api.campaign import Campaign, RunState
 from openfe_api.exceptions import OpenFEAPIError
 from openfe_api.execution.runner import load_profile, relax_campaign, submit_campaign
@@ -788,6 +789,66 @@ def _render_network_results(name: str, outcome: GatherOutcome, quiet: bool) -> N
                 console.print(
                     f"[{style}]{check.status}[/{style}] {check_name} {check.name}: {check.detail}"
                 )
+
+
+@app.command()
+def analyze(
+    campaign_dir: CampaignArgument,
+    measured: Annotated[
+        Path | None,
+        typer.Option(
+            "--measured",
+            help="CSV or TSV of measured free energies in kcal/mol, with a ligand name column.",
+        ),
+    ] = None,
+    dark: Annotated[
+        bool,
+        typer.Option("--dark", help="Draw the figures for a dark background."),
+    ] = False,
+) -> None:
+    """Write a campaign's figures and tables, without changing the campaign.
+
+    Read-only and repeatable: run it again with different measured values whenever they
+    arrive. Measured values are read in kcal/mol and used as given.
+
+    Args:
+        campaign_dir: Path to the campaign directory.
+        measured: Table of measured free energies to compare against.
+        dark: Whether to draw for a dark background.
+    """
+    try:
+        campaign = Campaign.open(campaign_dir)
+        outcome = analyze_campaign(campaign, measurements=measured, dark=dark)
+    except OpenFEAPIError as error:
+        _fail(error)
+        return
+
+    for warning in outcome.warnings:
+        console.print(f"[yellow]warning[/yellow] {warning}")
+
+    correlation = outcome.correlation
+    if correlation is not None and correlation.paired:
+        table = Table(title=f"{campaign.manifest.name}: against measurement", header_style="bold")
+        table.add_column("Metric")
+        table.add_column("Value", justify="right")
+        table.add_row("ligands compared", str(len(correlation.paired)))
+        for label, value, suffix in (
+            ("Pearson R", correlation.pearson, ""),
+            ("Spearman", correlation.spearman, ""),
+            ("Kendall tau", correlation.kendall, ""),
+            ("MUE", correlation.mue, " kcal/mol"),
+            ("RMSE", correlation.rmse, " kcal/mol"),
+        ):
+            if value is not None:
+                table.add_row(label, f"{value:.2f}{suffix}")
+        console.print(table)
+    else:
+        console.print(f"{len(outcome.predictions)} ligand(s) ranked, nothing to compare against.")
+
+    for name, path in sorted(outcome.figures.items()):
+        console.print(f"{name}: {path}")
+    for name, path in sorted(outcome.tables.items()):
+        console.print(f"{name}: {path}")
 
 
 @app.command()

@@ -40,6 +40,7 @@ def test_a_group_is_a_campaign_subdirectory() -> None:
         "relaxed",
         "runs",
         "results",
+        "analysis",
         "logs",
     }
 
