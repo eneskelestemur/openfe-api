@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["DARK", "LIGHT", "Theme", "style_axes", "theme_for"]
+__all__ = ["DARK", "LIGHT", "SEQUENTIAL", "Theme", "style_axes", "theme_for"]
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,19 @@ DARK = Theme(
     predicted_only="#d95926",
     band="#262624",
 )
+
+
+SEQUENTIAL = (
+    "#cde2fb",
+    "#9ec5f4",
+    "#6da7ec",
+    "#3987e5",
+    "#2a78d6",
+    "#256abf",
+    "#184f95",
+    "#0d366b",
+)
+"""One hue, light to dark, for a continuous magnitude such as an occupancy."""
 
 
 def theme_for(dark: bool) -> Theme:

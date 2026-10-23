@@ -34,6 +34,7 @@ __all__ = [
     "TrajectorySource",
     "find_sources",
     "measure_repeat",
+    "open_trajectory",
     "summarize_run",
 ]
 
@@ -183,8 +184,18 @@ def find_sources(repeat_dir: Path) -> list[TrajectorySource]:
     return sources
 
 
-def _open(source: TrajectorySource) -> mda.Universe:
-    """Open a trajectory, aligned so motion of the box is not read as motion of the ligand."""
+def open_trajectory(source: TrajectorySource) -> mda.Universe:
+    """Open a trajectory, aligned so motion of the box is not read as motion of the ligand.
+
+    Args:
+        source: The trajectory and its topology.
+
+    Returns:
+        The open universe. The caller closes its trajectory.
+
+    Raises:
+        InputValidationError: If it holds too few frames, or no ligand to follow.
+    """
     if source.multistate:
         try:
             universe = create_universe_single_state(
@@ -224,7 +235,7 @@ def measure_repeat(source: TrajectorySource, run: str, repeat: int) -> list[Repe
     Returns:
         One entry per ligand, or a single protein-only entry for a system with no ligand.
     """
-    universe = _open(source)
+    universe = open_trajectory(source)
     try:
         return _measure(universe, source, run, repeat)
     finally:

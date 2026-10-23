@@ -10,21 +10,33 @@ from pathlib import Path
 
 import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 from matplotlib.lines import Line2D
 
 from openfe_api.analysis.correlation import Correlation, Prediction
-from openfe_api.analysis.style import Theme, style_axes
+from openfe_api.analysis.interactions import NOISY_INTERACTION, ResidueContact
+from openfe_api.analysis.style import SEQUENTIAL, Theme, style_axes
 from openfe_api.analysis.trajectory import RunStability
 from openfe_api.log import get_logger
 
-__all__ = ["TOLERANCE", "correlation_figure", "ranking_figure", "stability_figure"]
+__all__ = [
+    "MIN_OCCUPANCY",
+    "TOLERANCE",
+    "correlation_figure",
+    "interaction_figure",
+    "ranking_figure",
+    "stability_figure",
+]
 
 logger = get_logger(__name__)
 
 TOLERANCE = 1.0
 """Half-width of the band drawn around agreement, in kcal/mol."""
+
+MIN_OCCUPANCY = 0.1
+"""Occupancy a contact must reach in some run before it earns a row in the heatmap."""
 
 MARKER_SIZE = 46
 MARKER_RING = 1.2
@@ -432,5 +444,75 @@ def stability_figure(summaries: list[RunStability], title: str, theme: Theme, pa
         edgecolor=theme.axis,
         framealpha=1.0,
     )
+
+    return _save(figure, path)
+
+
+def interaction_figure(
+    contacts: list[ResidueContact], title: str, theme: Theme, path: Path
+) -> Path:
+    """Draw contact occupancy for every run side by side.
+
+    One column per run, so an analogue that lost a hinge bond is visible against the rest.
+    Van der Waals contacts are left out: they fire on nearly every nearby residue and bury
+    the interactions that distinguish one ligand from another.
+
+    Args:
+        contacts: Occupancies from every run, already aggregated across repeats.
+        title: Figure title, usually the campaign name.
+        theme: The colors to draw with.
+        path: Where to write the figure.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ValueError: If nothing is left to draw once the noisy contacts are dropped.
+    """
+    useful = [entry for entry in contacts if entry.interaction != NOISY_INTERACTION]
+    if not useful:
+        raise ValueError("no interactions to draw")
+
+    # A contact seen in a handful of frames of one run is noise, and a row of it crowds out
+    # the contacts that actually separate the ligands.
+    strongest: dict[tuple[str, str], float] = {}
+    for entry in useful:
+        key = (entry.residue, entry.interaction)
+        strongest[key] = max(strongest.get(key, 0.0), entry.occupancy)
+    keep = {key for key, value in strongest.items() if value >= MIN_OCCUPANCY}
+    useful = [entry for entry in useful if (entry.residue, entry.interaction) in keep]
+    if not useful:
+        raise ValueError("no interactions to draw")
+
+    runs = sorted({entry.run for entry in useful})
+    rows = sorted({(entry.residue, entry.interaction) for entry in useful})
+    grid = np.zeros((len(rows), len(runs)))
+    positions = {key: index for index, key in enumerate(rows)}
+    columns = {run: index for index, run in enumerate(runs)}
+    for entry in useful:
+        row = positions[(entry.residue, entry.interaction)]
+        grid[row, columns[entry.run]] = max(grid[row, columns[entry.run]], entry.occupancy)
+
+    height = max(2.6, 0.22 * len(rows) + 1.4)
+    width = max(4.0, 0.5 * len(runs) + 3.0)
+    figure = Figure(figsize=(width, height), layout="constrained")
+    figure.set_facecolor(theme.surface)
+    axes = figure.add_subplot(111)
+    style_axes(axes, theme)
+    axes.grid(False)
+
+    colors = LinearSegmentedColormap.from_list("occupancy", SEQUENTIAL)
+    image = axes.imshow(grid, cmap=colors, vmin=0.0, vmax=1.0, aspect="auto")
+    axes.set_xticks(np.arange(len(runs)))
+    axes.set_xticklabels(runs, fontsize=7, rotation=30, ha="right")
+    axes.set_yticks(np.arange(len(rows)))
+    axes.set_yticklabels([f"{residue}  {kind}" for residue, kind in rows], fontsize=7)
+    axes.set_title(title, color=theme.primary_ink, loc="left", pad=10)
+
+    bar = figure.colorbar(image, ax=axes, fraction=0.03, pad=0.02)
+    bar.set_label("occupancy", color=theme.secondary_ink, fontsize=8)
+    bar.ax.tick_params(colors=theme.muted_ink, labelsize=7)
+    for spine in bar.ax.spines.values():
+        spine.set_edgecolor(theme.axis)
 
     return _save(figure, path)

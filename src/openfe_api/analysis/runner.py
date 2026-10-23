@@ -16,7 +16,13 @@ from pathlib import Path
 from openfe_api.analysis.collected import collect_plots
 from openfe_api.analysis.correlation import Correlation, Prediction, correlate
 from openfe_api.analysis.experimental import Measurement, read_measurements
-from openfe_api.analysis.figures import correlation_figure, ranking_figure, stability_figure
+from openfe_api.analysis.figures import (
+    correlation_figure,
+    interaction_figure,
+    ranking_figure,
+    stability_figure,
+)
+from openfe_api.analysis.interactions import ResidueContact, measure_interactions
 from openfe_api.analysis.style import Theme, theme_for
 from openfe_api.analysis.trajectory import (
     RepeatMetrics,
@@ -62,6 +68,8 @@ METRICS_FILE = "metrics.json"
 TRAJECTORY_TABLE = "trajectory.tsv"
 STABILITY_TABLE = "stability.tsv"
 STABILITY_FIGURE = "stability.png"
+INTERACTION_TABLE = "interactions.tsv"
+INTERACTION_FIGURE = "interactions.png"
 
 _REPEAT_GLOBS = ("*/repeat*", "*/*/repeat*")
 
@@ -218,21 +226,21 @@ def _work_items(campaign: Campaign) -> list[tuple[TrajectorySource, str, int]]:
 
 def _measure_one(
     item: tuple[TrajectorySource, str, int],
-) -> tuple[list[RepeatMetrics], str | None]:
+) -> tuple[list[RepeatMetrics], list[ResidueContact], str | None]:
     """Measure one trajectory, returning the failure instead of raising it.
 
     A worker process cannot let an exception escape without taking the pool down with it.
     """
     source, run, repeat = item
     try:
-        return measure_repeat(source, run, repeat), None
+        return measure_repeat(source, run, repeat), measure_interactions(source, run, repeat), None
     except OpenFEAPIError as error:
-        return [], str(error)
+        return [], [], str(error)
 
 
 def measure_trajectories(
     campaign: Campaign, workers: int = 1
-) -> tuple[list[RepeatMetrics], list[str]]:
+) -> tuple[list[RepeatMetrics], list[ResidueContact], list[str]]:
     """Measure every repeat of every run that produced a trajectory.
 
     A repeat that cannot be measured is reported and the rest carry on: a short or
@@ -245,11 +253,12 @@ def measure_trajectories(
             minutes, which is the production case rather than a smoke test.
 
     Returns:
-        Every repeat measured, and a message for each one that could not be.
+        Every repeat measured, the contacts its ligands made, and a message for each one
+        that could not be measured.
     """
     items = _work_items(campaign)
     if not items:
-        return [], []
+        return [], [], []
 
     if workers <= 1:
         outcomes = [_measure_one(item) for item in items]
@@ -270,14 +279,16 @@ def measure_trajectories(
             outcomes = [_measure_one(item) for item in items]
 
     measured: list[RepeatMetrics] = []
+    contacts: list[ResidueContact] = []
     skipped: list[str] = []
-    for metrics, failure in outcomes:
+    for metrics, found, failure in outcomes:
         measured += metrics
+        contacts += found
         if failure is not None:
             skipped.append(failure)
             logger.warning("Skipped a trajectory: %s", failure)
 
-    return measured, skipped
+    return measured, contacts, skipped
 
 
 def _write_trajectory(metrics: list[RepeatMetrics], path: Path) -> Path:
@@ -425,7 +436,7 @@ def _add_trajectories(
     campaign: Campaign, outcome: AnalysisOutcome, theme: Theme, directory: Path, workers: int
 ) -> None:
     """Measure the trajectories and write what they show into the analysis."""
-    metrics, skipped = measure_trajectories(campaign, workers)
+    metrics, contacts, skipped = measure_trajectories(campaign, workers)
     outcome.warnings += skipped
     if not metrics:
         outcome.warnings.append("no trajectory could be measured")
@@ -438,6 +449,20 @@ def _add_trajectories(
 
     outcome.tables["trajectory"] = _write_trajectory(metrics, directory / TRAJECTORY_TABLE)
     outcome.tables["stability"] = _write_stability(outcome.stability, directory / STABILITY_TABLE)
+    if contacts:
+        outcome.tables["interactions"] = _write_interactions(
+            contacts, directory / INTERACTION_TABLE
+        )
+        try:
+            outcome.figures["interactions"] = interaction_figure(
+                contacts,
+                f"{campaign.manifest.name} · contact occupancy",
+                theme,
+                directory / INTERACTION_FIGURE,
+            )
+        except ValueError:
+            outcome.warnings.append("only van der Waals contacts were found, so no heatmap")
+
     try:
         outcome.figures["stability"] = stability_figure(
             outcome.stability,
@@ -447,3 +472,18 @@ def _add_trajectories(
         )
     except ValueError:
         outcome.warnings.append("no run had a drift to draw, so no stability figure was written")
+
+
+def _write_interactions(contacts: list[ResidueContact], path: Path) -> Path:
+    """Write occupancy per run, residue and interaction, averaged over repeats."""
+    totals: dict[tuple[str, str, str, str], list[float]] = {}
+    for entry in contacts:
+        key = (entry.run, entry.ligand, entry.residue, entry.interaction)
+        totals.setdefault(key, []).append(entry.occupancy)
+
+    lines = ["run\tligand\tresidue\tinteraction\toccupancy\trepeats"]
+    for (run, ligand, residue, interaction), values in sorted(totals.items()):
+        mean = sum(values) / len(values)
+        lines.append(f"{run}\t{ligand}\t{residue}\t{interaction}\t{mean:.4f}\t{len(values)}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path

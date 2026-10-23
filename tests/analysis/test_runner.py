@@ -275,7 +275,7 @@ def test_measuring_gives_the_same_answer_in_parallel(tmp_path: Path, workers: in
     campaign = _finished_abfe(tmp_path)
     _measurable(campaign, "mini", repeats=2)
 
-    metrics, skipped = measure_trajectories(campaign, workers=workers)
+    metrics, _, skipped = measure_trajectories(campaign, workers=workers)
 
     assert skipped == []
     assert sorted((entry.run, entry.repeat) for entry in metrics) == [("mini", 1), ("mini", 2)]
@@ -290,6 +290,6 @@ def test_a_failure_in_one_worker_does_not_take_the_pool_down(tmp_path: Path) -> 
     write_mini_pdb(broken / "equil_npt.pdb", protein=2)
     (broken / "simulation.xtc").write_bytes(b"not a trajectory")
 
-    metrics, _ = measure_trajectories(campaign, workers=2)
+    metrics, _, _ = measure_trajectories(campaign, workers=2)
 
     assert [entry.repeat for entry in metrics] == [1]
