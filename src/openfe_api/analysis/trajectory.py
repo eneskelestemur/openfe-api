@@ -287,26 +287,30 @@ def measure_repeat(source: TrajectorySource, run: str, repeat: int) -> list[Repe
 def summarize_run(run: str, metrics: list[RepeatMetrics]) -> RunStability:
     """Reduce a run's repeats to one row.
 
+    Only the bound phase says anything about whether a pose held, so drift and ligand RMSD
+    come from the entries that have a protein. A ligand's RMSD in a solvent box measures its
+    own flexing, which is a different quantity and is not averaged in.
+
     Args:
         run: Run name.
-        metrics: Every repeat measured for it.
+        metrics: Every repeat measured for it, across phases.
 
     Returns:
-        The aggregate. Values are None when no repeat produced a frame.
+        The aggregate. Values are None where nothing was measured.
     """
-    drift = [value for entry in metrics for value in entry.ligand_drift]
-    ligand = [value for entry in metrics for value in entry.ligand_rmsd]
+    summary = RunStability(run=run, repeats=len({entry.repeat for entry in metrics}))
+    bound = [entry for entry in metrics if entry.ligand_drift]
+    drift = [value for entry in bound for value in entry.ligand_drift]
+    ligand = [value for entry in bound for value in entry.ligand_rmsd]
     protein = [value for entry in metrics for value in entry.protein_rmsd]
-    summary = RunStability(run=run, repeats=len(metrics))
+
+    if protein:
+        summary.mean_protein_rmsd = float(np.mean(protein))
     if not drift:
         return summary
 
     summary.mean_drift = float(np.mean(drift))
     summary.max_drift = float(np.max(drift))
     summary.mean_ligand_rmsd = float(np.mean(ligand)) if ligand else None
-    summary.mean_protein_rmsd = float(np.mean(protein)) if protein else None
-    summary.worst_repeat = max(
-        (entry for entry in metrics if entry.ligand_drift),
-        key=lambda entry: max(entry.ligand_drift),
-    ).repeat
+    summary.worst_repeat = max(bound, key=lambda entry: max(entry.ligand_drift)).repeat
     return summary

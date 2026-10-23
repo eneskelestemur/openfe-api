@@ -805,6 +805,14 @@ def analyze(
         bool,
         typer.Option("--dark", help="Draw the figures for a dark background."),
     ] = False,
+    trajectories: Annotated[
+        bool,
+        typer.Option(
+            "--trajectories",
+            help="Also measure how far each ligand moved. Reads the trajectories, so it takes "
+            "minutes rather than seconds.",
+        ),
+    ] = False,
 ) -> None:
     """Write a campaign's figures and tables, without changing the campaign.
 
@@ -815,10 +823,13 @@ def analyze(
         campaign_dir: Path to the campaign directory.
         measured: Table of measured free energies to compare against.
         dark: Whether to draw for a dark background.
+        trajectories: Whether to measure ligand and protein movement as well.
     """
     try:
         campaign = Campaign.open(campaign_dir)
-        outcome = analyze_campaign(campaign, measurements=measured, dark=dark)
+        outcome = analyze_campaign(
+            campaign, measurements=measured, dark=dark, trajectories=trajectories
+        )
     except OpenFEAPIError as error:
         _fail(error)
         return
@@ -842,8 +853,25 @@ def analyze(
             if value is not None:
                 table.add_row(label, f"{value:.2f}{suffix}")
         console.print(table)
-    else:
+    elif outcome.predictions:
         console.print(f"{len(outcome.predictions)} ligand(s) ranked, nothing to compare against.")
+
+    if outcome.stability:
+        table = Table(title=f"{campaign.manifest.name}: ligand drift", header_style="bold")
+        table.add_column("Run")
+        table.add_column("repeats", justify="right")
+        table.add_column("mean (A)", justify="right")
+        table.add_column("largest (A)", justify="right")
+        for entry in sorted(
+            outcome.stability, key=lambda item: item.max_drift or 0.0, reverse=True
+        ):
+            table.add_row(
+                entry.run,
+                str(entry.repeats),
+                "-" if entry.mean_drift is None else f"{entry.mean_drift:.2f}",
+                "-" if entry.max_drift is None else f"{entry.max_drift:.2f}",
+            )
+        console.print(table)
 
     for name, path in sorted(outcome.figures.items()):
         console.print(f"{name}: {path}")

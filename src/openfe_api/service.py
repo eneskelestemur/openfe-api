@@ -362,10 +362,31 @@ class AnalysisRequest(BaseModel):
         measured: Measured free energies in kcal/mol, keyed by ligand name. A bare number
             is accepted where there is no uncertainty to give.
         dark: Whether to draw the figures for a dark background.
+        trajectories: Whether to measure how far each ligand moved during its run. This
+            reads the trajectories, so the request takes minutes rather than a second.
     """
 
     measured: dict[str, float | MeasuredValue] = Field(default_factory=dict)
     dark: bool = False
+    trajectories: bool = False
+
+
+class RunDrift(BaseModel):
+    """How far one run's ligand moved.
+
+    Attributes:
+        run: Run name.
+        repeats: Repeats measured.
+        mean_drift: Mean centre-of-mass drift in angstrom.
+        max_drift: Largest drift any frame reached, in angstrom.
+        worst_repeat: The repeat holding that largest drift.
+    """
+
+    run: str
+    repeats: int
+    mean_drift: float | None = None
+    max_drift: float | None = None
+    worst_repeat: int | None = None
 
 
 class AnalysisSummary(BaseModel):
@@ -382,6 +403,7 @@ class AnalysisSummary(BaseModel):
         kendall: Kendall rank correlation.
         mue: Mean unsigned error in kcal/mol.
         rmse: Root mean square error in kcal/mol.
+        stability: Ligand drift per run, when the trajectories were measured.
         files: What was written, keyed by what it holds, as paths inside the campaign.
         warnings: Concerns the reader should know about.
     """
@@ -396,6 +418,7 @@ class AnalysisSummary(BaseModel):
     kendall: float | None = None
     mue: float | None = None
     rmse: float | None = None
+    stability: list[RunDrift] = Field(default_factory=list)
     files: dict[str, str] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
 
@@ -957,7 +980,9 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
         }
 
         try:
-            outcome = analyze_campaign(campaign, measurements or None, dark=body.dark)
+            outcome = analyze_campaign(
+                campaign, measurements or None, dark=body.dark, trajectories=body.trajectories
+            )
         except InputValidationError as error:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
         except OpenFEAPIError as error:
@@ -975,6 +1000,16 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
             kendall=correlation.kendall if correlation else None,
             mue=correlation.mue if correlation else None,
             rmse=correlation.rmse if correlation else None,
+            stability=[
+                RunDrift(
+                    run=entry.run,
+                    repeats=entry.repeats,
+                    mean_drift=entry.mean_drift,
+                    max_drift=entry.max_drift,
+                    worst_repeat=entry.worst_repeat,
+                )
+                for entry in outcome.stability
+            ],
             files={
                 label: _campaign_relative(campaign, path)
                 for label, path in (*outcome.figures.items(), *outcome.tables.items())

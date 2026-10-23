@@ -17,6 +17,9 @@ Everything lands in `analysis/` inside the campaign.
 | `correlation.png` | Predicted against measured, when measurements were given |
 | `correlation.tsv` | Every point behind that figure |
 | `metrics.json` | Pearson, Spearman, Kendall, MUE and RMSE |
+| `plots/` | The overlap, exchange and convergence plots OpenFE wrote, linked from `runs/` |
+| `stability.png`, `stability.tsv` | Ligand drift per run, with `--trajectories` |
+| `trajectory.tsv` | Protein RMSD, ligand RMSD and drift per frame, with `--trajectories` |
 
 Every figure has its numbers written beside it, so you can re-plot without re-running.
 
@@ -50,6 +53,21 @@ Correlation and ranking are unaffected either way.
 
 Plain MD produces no free energy, so `analyze` refuses it. Metrics over its trajectories are
 a later milestone.
+
+## Trajectory metrics
+
+`--trajectories` measures how far each ligand moved during its run: protein backbone RMSD,
+symmetry-corrected ligand RMSD, and ligand centre-of-mass drift. It reads the trajectories,
+so it takes minutes where the rest of the analysis takes seconds, and is off by default.
+
+An alchemical run is read at its fully interacting end state; plain MD is read whole. Each
+repeat is measured separately and then aggregated per run, so disagreement between repeats
+stays visible. A repeat that cannot be measured — too short to have two frames, or missing
+its topology — is reported as a warning and the rest carry on.
+
+Drift is movement relative to the protein, so it is left out of a solvent phase and of a
+ligand simulated on its own: aligned to itself, a ligand reports no drift whatever it does.
+An apo system reports protein RMSD and nothing else.
 
 ## Figures
 

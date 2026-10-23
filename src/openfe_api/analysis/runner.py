@@ -10,11 +10,19 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from openfe_api.analysis.collected import collect_plots
 from openfe_api.analysis.correlation import Correlation, Prediction, correlate
 from openfe_api.analysis.experimental import Measurement, read_measurements
-from openfe_api.analysis.figures import correlation_figure, ranking_figure
-from openfe_api.analysis.style import theme_for
-from openfe_api.campaign import ANALYSIS_DIR, PLANS_DIR, Campaign
+from openfe_api.analysis.figures import correlation_figure, ranking_figure, stability_figure
+from openfe_api.analysis.style import Theme, theme_for
+from openfe_api.analysis.trajectory import (
+    RepeatMetrics,
+    RunStability,
+    find_sources,
+    measure_repeat,
+    summarize_run,
+)
+from openfe_api.campaign import ANALYSIS_DIR, PLANS_DIR, RUNS_DIR, Campaign
 from openfe_api.exceptions import InputValidationError, OpenFEAPIError
 from openfe_api.log import get_logger
 from openfe_api.provenance import collect_provenance
@@ -27,7 +35,18 @@ from openfe_api.schema.md import MdRequest
 from openfe_api.schema.rbfe import RbfeRequest
 from openfe_api.schema.septop import SepTopRequest
 
-__all__ = ["AnalysisOutcome", "analyze_campaign", "read_predictions"]
+__all__ = [
+    "AnalysisOutcome",
+    "NoFreeEnergyError",
+    "analyze_campaign",
+    "measure_trajectories",
+    "read_predictions",
+]
+
+
+class NoFreeEnergyError(OpenFEAPIError):
+    """Raised when a protocol produces no free energy to compare."""
+
 
 logger = get_logger(__name__)
 
@@ -36,6 +55,11 @@ RANKING_FIGURE = "ranking.png"
 PREDICTIONS_TABLE = "predictions.tsv"
 CORRELATION_TABLE = "correlation.tsv"
 METRICS_FILE = "metrics.json"
+TRAJECTORY_TABLE = "trajectory.tsv"
+STABILITY_TABLE = "stability.tsv"
+STABILITY_FIGURE = "stability.png"
+
+_REPEAT_GLOBS = ("*/repeat*", "*/*/repeat*")
 
 
 @dataclass
@@ -47,6 +71,7 @@ class AnalysisOutcome:
         protocol: The campaign's protocol.
         predictions: The calculated free energies the analysis read.
         correlation: The comparison against measured values, when any were given.
+        stability: One aggregate per run whose trajectories were measured.
         figures: Figures written, keyed by what each one shows.
         tables: Tables written, keyed by what each one holds.
         warnings: Concerns the reader should know about.
@@ -56,6 +81,7 @@ class AnalysisOutcome:
     protocol: str
     predictions: list[Prediction] = field(default_factory=list)
     correlation: Correlation | None = None
+    stability: list[RunStability] = field(default_factory=list)
     figures: dict[str, Path] = field(default_factory=dict)
     tables: dict[str, Path] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
@@ -101,10 +127,9 @@ def read_predictions(campaign: Campaign) -> tuple[list[Prediction], bool]:
             ]
             relative = True
         case MdRequest():
-            raise OpenFEAPIError(
-                f"{campaign.manifest.name}: a plain MD campaign produces no free energy to "
-                "analyze. Metrics over its trajectories are a later milestone; its files are "
-                "listed by 'gather'."
+            raise NoFreeEnergyError(
+                f"{campaign.manifest.name}: a plain MD campaign produces no free energy. Pass "
+                "'--trajectories' to measure how far its ligands moved instead."
             )
         case _:
             raise OpenFEAPIError(
@@ -168,10 +193,102 @@ def _write_metrics(outcome: Correlation, path: Path) -> Path:
     return path
 
 
+def measure_trajectories(campaign: Campaign) -> tuple[list[RepeatMetrics], list[str]]:
+    """Measure every repeat of every run that produced a trajectory.
+
+    A repeat that cannot be measured is reported and the rest carry on: a short or
+    interrupted run should not cost the campaign its whole analysis.
+
+    Args:
+        campaign: The campaign to read.
+
+    Returns:
+        Every repeat measured, and a message for each one that could not be.
+    """
+    runs = campaign.directory / RUNS_DIR
+    measured: list[RepeatMetrics] = []
+    skipped: list[str] = []
+    if not runs.is_dir():
+        return measured, skipped
+
+    seen: set[Path] = set()
+    for pattern in _REPEAT_GLOBS:
+        for repeat_dir in sorted(runs.glob(pattern)):
+            if repeat_dir in seen or not repeat_dir.is_dir():
+                continue
+            seen.add(repeat_dir)
+            relative = repeat_dir.relative_to(runs)
+            run = relative.parts[0]
+            repeat = int(repeat_dir.name.removeprefix("repeat"))
+            for source in find_sources(repeat_dir):
+                try:
+                    measured += measure_repeat(source, run, repeat)
+                except OpenFEAPIError as error:
+                    skipped.append(str(error))
+                    logger.warning("Skipped %s: %s", source.trajectory.name, error)
+
+    return measured, skipped
+
+
+def _write_trajectory(metrics: list[RepeatMetrics], path: Path) -> Path:
+    """Write one row per frame."""
+    header = "run\trepeat\tphase\tligand\ttime_ps\tprotein_rmsd\tligand_rmsd\tligand_drift"
+    lines = [header]
+    for entry in metrics:
+        for index, time_ps in enumerate(entry.times_ps):
+            values = [
+                entry.run,
+                str(entry.repeat),
+                entry.phase,
+                entry.ligand,
+                f"{time_ps:.3f}",
+                _at(entry.protein_rmsd, index),
+                _at(entry.ligand_rmsd, index),
+                _at(entry.ligand_drift, index),
+            ]
+            lines.append("\t".join(values))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _at(values: list[float], index: int) -> str:
+    """Render one frame's value, blank where the metric does not apply."""
+    return f"{values[index]:.4f}" if index < len(values) else ""
+
+
+def _write_stability(summaries: list[RunStability], path: Path) -> Path:
+    """Write one row per run."""
+    lines = [
+        "run\trepeats\tmean_drift\tmax_drift\tmean_ligand_rmsd\tmean_protein_rmsd\tworst_repeat"
+    ]
+    for entry in sorted(summaries, key=lambda item: item.max_drift or 0.0, reverse=True):
+        lines.append(
+            "\t".join(
+                [
+                    entry.run,
+                    str(entry.repeats),
+                    _number(entry.mean_drift),
+                    _number(entry.max_drift),
+                    _number(entry.mean_ligand_rmsd),
+                    _number(entry.mean_protein_rmsd),
+                    "" if entry.worst_repeat is None else str(entry.worst_repeat),
+                ]
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _number(value: float | None) -> str:
+    """Render a value that may not have been measured."""
+    return "" if value is None else f"{value:.4f}"
+
+
 def analyze_campaign(
     campaign: Campaign,
     measurements: Path | dict[str, Measurement] | None = None,
     dark: bool = False,
+    trajectories: bool = False,
 ) -> AnalysisOutcome:
     """Read a campaign's results and write its analysis.
 
@@ -180,6 +297,8 @@ def analyze_campaign(
         measurements: A table of measured free energies, or the measurements themselves.
             Without them the analysis reports the predicted ranking alone.
         dark: Whether to draw the figures for a dark surface.
+        trajectories: Whether to measure how far each ligand moved during its run. This
+            reads the trajectories, which takes far longer than the rest of the analysis.
 
     Returns:
         What was written, and the metrics behind it.
@@ -188,7 +307,13 @@ def analyze_campaign(
         OpenFEAPIError: If the protocol produces no free energy to analyze.
         InputValidationError: If nothing has been gathered, or the measured table is unusable.
     """
-    predictions, relative = read_predictions(campaign)
+    try:
+        predictions, relative = read_predictions(campaign)
+    except NoFreeEnergyError:
+        if not trajectories:
+            raise
+        predictions, relative = [], False
+
     directory = campaign.directory / ANALYSIS_DIR
     directory.mkdir(parents=True, exist_ok=True)
     theme = theme_for(dark)
@@ -198,12 +323,21 @@ def analyze_campaign(
     )
     name = campaign.manifest.name
 
-    outcome.tables["predictions"] = _write_predictions(predictions, directory / PREDICTIONS_TABLE)
-    outcome.figures["ranking"] = ranking_figure(
-        predictions, f"{name} · predicted ranking", theme, directory / RANKING_FIGURE
-    )
+    if predictions:
+        outcome.tables["predictions"] = _write_predictions(
+            predictions, directory / PREDICTIONS_TABLE
+        )
+        outcome.figures["ranking"] = ranking_figure(
+            predictions, f"{name} · predicted ranking", theme, directory / RANKING_FIGURE
+        )
 
-    if measurements is None:
+    for plot in collect_plots(campaign):
+        outcome.figures.setdefault(f"{plot.run}_{plot.kind}", plot.link)
+
+    if trajectories:
+        _add_trajectories(campaign, outcome, theme, directory)
+
+    if measurements is None or not predictions:
         logger.info("Analyzed '%s': %d ligand(s), no measured values", name, len(predictions))
         return outcome
 
@@ -233,3 +367,31 @@ def analyze_campaign(
         len(correlation.predicted_only),
     )
     return outcome
+
+
+def _add_trajectories(
+    campaign: Campaign, outcome: AnalysisOutcome, theme: Theme, directory: Path
+) -> None:
+    """Measure the trajectories and write what they show into the analysis."""
+    metrics, skipped = measure_trajectories(campaign)
+    outcome.warnings += skipped
+    if not metrics:
+        outcome.warnings.append("no trajectory could be measured")
+        return
+
+    by_run: dict[str, list[RepeatMetrics]] = {}
+    for entry in metrics:
+        by_run.setdefault(entry.run, []).append(entry)
+    outcome.stability = [summarize_run(run, rows) for run, rows in sorted(by_run.items())]
+
+    outcome.tables["trajectory"] = _write_trajectory(metrics, directory / TRAJECTORY_TABLE)
+    outcome.tables["stability"] = _write_stability(outcome.stability, directory / STABILITY_TABLE)
+    try:
+        outcome.figures["stability"] = stability_figure(
+            outcome.stability,
+            f"{campaign.manifest.name} · ligand drift",
+            theme,
+            directory / STABILITY_FIGURE,
+        )
+    except ValueError:
+        outcome.warnings.append("no run had a drift to draw, so no stability figure was written")

@@ -758,3 +758,22 @@ def test_analysing_a_plain_md_campaign_is_refused(client: TestClient, tmp_path: 
 
     assert response.status_code == 409
     assert "no free energy" in response.text
+
+
+def test_analysis_leaves_trajectories_alone_unless_asked(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _finished_abfe_campaign(client, tmp_path)
+
+    body = client.post("/campaigns/svc_campaign/analysis", json={}).json()
+
+    assert body["stability"] == []
+
+
+def test_analysis_reports_drift_when_asked(client: TestClient, tmp_path: Path) -> None:
+    _finished_abfe_campaign(client, tmp_path)
+
+    body = client.post("/campaigns/svc_campaign/analysis", json={"trajectories": True}).json()
+
+    assert body["stability"] == []
+    assert any("no trajectory" in warning for warning in body["warnings"])

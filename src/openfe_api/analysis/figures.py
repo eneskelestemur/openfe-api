@@ -16,9 +16,10 @@ from matplotlib.lines import Line2D
 
 from openfe_api.analysis.correlation import Correlation, Prediction
 from openfe_api.analysis.style import Theme, style_axes
+from openfe_api.analysis.trajectory import RunStability
 from openfe_api.log import get_logger
 
-__all__ = ["TOLERANCE", "correlation_figure", "ranking_figure"]
+__all__ = ["TOLERANCE", "correlation_figure", "ranking_figure", "stability_figure"]
 
 logger = get_logger(__name__)
 
@@ -359,5 +360,77 @@ def ranking_figure(predictions: list[Prediction], title: str, theme: Theme, path
     axes.invert_yaxis()
     axes.set_xlabel("Predicted ΔG (kcal/mol)")
     axes.set_title(title, color=theme.primary_ink, loc="left", pad=10)
+
+    return _save(figure, path)
+
+
+def stability_figure(summaries: list[RunStability], title: str, theme: Theme, path: Path) -> Path:
+    """Draw how far each run's ligand moved, ordered worst first.
+
+    Args:
+        summaries: One aggregate per run.
+        title: Figure title, usually the campaign name.
+        theme: The colors to draw with.
+        path: Where to write the figure.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ValueError: If no run has a drift to draw.
+    """
+    measured = [entry for entry in summaries if entry.max_drift is not None]
+    if not measured:
+        raise ValueError("no run has a measured drift")
+
+    ordered = sorted(measured, key=lambda entry: entry.max_drift or 0.0, reverse=True)
+    height = max(2.4, 0.26 * len(ordered) + 1.2)
+    figure = Figure(figsize=(6.0, height), layout="constrained")
+    figure.set_facecolor(theme.surface)
+    axes = figure.add_subplot(111)
+    style_axes(axes, theme)
+    axes.grid(axis="y", visible=False)
+
+    positions = np.arange(len(ordered), dtype=float)
+    means = np.array([entry.mean_drift or 0.0 for entry in ordered])
+    maxima = np.array([entry.max_drift or 0.0 for entry in ordered])
+
+    axes.hlines(positions, means, maxima, color=theme.measured, linewidth=1.6, alpha=0.5)
+    axes.scatter(
+        maxima,
+        positions,
+        s=MARKER_SIZE,
+        facecolor="none",
+        edgecolor=theme.measured,
+        linewidth=1.4,
+        zorder=4,
+        label="largest",
+    )
+    axes.scatter(
+        means,
+        positions,
+        s=MARKER_SIZE,
+        color=theme.measured,
+        edgecolor=theme.surface,
+        linewidth=MARKER_RING,
+        zorder=5,
+        label="mean",
+    )
+
+    axes.set_yticks(positions)
+    axes.set_yticklabels([entry.run for entry in ordered], fontsize=8)
+    axes.set_ylim(-0.8, len(ordered) - 0.2)
+    axes.set_xlim(left=0.0)
+    axes.set_xlabel("Ligand centre-of-mass drift (\u00c5)")
+    axes.set_title(title, color=theme.primary_ink, loc="left", pad=10)
+    axes.legend(
+        loc="lower right",
+        fontsize=7.5,
+        labelcolor=theme.secondary_ink,
+        frameon=True,
+        facecolor=theme.surface,
+        edgecolor=theme.axis,
+        framealpha=1.0,
+    )
 
     return _save(figure, path)

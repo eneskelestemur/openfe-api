@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from helpers import write_mini_pdb
 from openfe_api.analysis.trajectory import (
     RepeatMetrics,
     TrajectorySource,
@@ -17,54 +18,13 @@ from openfe_api.analysis.trajectory import (
 from openfe_api.exceptions import InputValidationError
 
 
-def _pdb(path: Path, protein: int = 0, ligands: int = 0) -> Path:
-    """Write a minimal PDB: a CA-only protein and whole methane molecules named UNK.
-
-    Carries a box, explicit hydrogens and CONECT records, as the topologies OpenFE writes
-    do. The alignment needs the box, fragment detection needs the bonds, and the
-    symmetry-corrected RMSD converts to RDKit, which needs the hydrogens.
-    """
-    lines = ["CRYST1  100.000  100.000  100.000  90.00  90.00  90.00 P 1           1"]
-    serial = 1
-    for index in range(protein):
-        lines.append(
-            f"ATOM  {serial:5d}  CA  ALA A{index + 1:4d}    "
-            f"{index * 4.0:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00  0.00           C"
-        )
-        serial += 1
-
-    offsets = (
-        (0.0, 0.0, 0.0),
-        (0.6, 0.6, 0.6),
-        (-0.6, -0.6, 0.6),
-        (0.6, -0.6, -0.6),
-        (-0.6, 0.6, -0.6),
-    )
-    bonds: list[tuple[int, int]] = []
-    for residue in range(ligands):
-        carbon = serial
-        base = 10.0 + 5.0 * residue
-        for position, (dx, dy, dz) in enumerate(offsets):
-            element = "C" if position == 0 else "H"
-            lines.append(
-                f"HETATM{serial:5d}  {element}{position:<3d}UNK L{residue + 1:4d}    "
-                f"{base + dx:8.3f}{dy:8.3f}{dz:8.3f}  1.00  0.00           {element}"
-            )
-            serial += 1
-        bonds += [(carbon, carbon + offset) for offset in range(1, 5)]
-
-    lines += [f"CONECT{a:5d}{b:5d}" for a, b in bonds]
-    path.write_text("\n".join(lines) + "\nEND\n", encoding="utf-8")
-    return path
-
-
 def _repeat_with(tmp_path: Path, **files: int) -> Path:
     """Build a repeat directory holding PDBs of the given atom counts."""
     repeat = tmp_path / "repeat1"
     for name, atoms in files.items():
         shared = repeat / f"shared_{name}Unit-abc_attempt_0"
         shared.mkdir(parents=True)
-        _pdb(shared / "alchemical_system.pdb", protein=atoms, ligands=1)
+        write_mini_pdb(shared / "alchemical_system.pdb", protein=atoms, ligands=1)
     return repeat
 
 
@@ -147,7 +107,7 @@ def test_a_system_with_neither_protein_nor_ligand_is_refused(tmp_path: Path) -> 
 
 def test_a_protein_only_system_is_measured_without_a_ligand(tmp_path: Path) -> None:
     """An apo run is a normal input, not a failure."""
-    topology = _pdb(tmp_path / "apo.pdb", protein=4)
+    topology = write_mini_pdb(tmp_path / "apo.pdb", protein=4)
     source = TrajectorySource(topology=topology, trajectory=topology, phase="", multistate=False)
 
     measured = measure_repeat(source, "apo", 1)
@@ -160,7 +120,7 @@ def test_a_protein_only_system_is_measured_without_a_ligand(tmp_path: Path) -> N
 
 def test_each_ligand_is_measured_separately(tmp_path: Path) -> None:
     """A SepTop end state carries both ligands of its edge."""
-    topology = _pdb(tmp_path / "pair.pdb", protein=4, ligands=2)
+    topology = write_mini_pdb(tmp_path / "pair.pdb", protein=4, ligands=2)
     source = TrajectorySource(topology=topology, trajectory=topology, phase="", multistate=False)
 
     measured = measure_repeat(source, "edge", 1)
@@ -171,7 +131,7 @@ def test_each_ligand_is_measured_separately(tmp_path: Path) -> None:
 
 def test_drift_is_left_out_without_a_protein(tmp_path: Path) -> None:
     """Aligned to itself, a ligand in solvent would report zero drift whatever it did."""
-    topology = _pdb(tmp_path / "solvent.pdb", ligands=1)
+    topology = write_mini_pdb(tmp_path / "solvent.pdb", ligands=1)
     source = TrajectorySource(topology=topology, trajectory=topology, phase="", multistate=False)
 
     measured = measure_repeat(source, "solvent", 1)
@@ -181,10 +141,48 @@ def test_drift_is_left_out_without_a_protein(tmp_path: Path) -> None:
 
 
 def test_frame_times_are_recorded(tmp_path: Path) -> None:
-    topology = _pdb(tmp_path / "apo.pdb", protein=4)
+    topology = write_mini_pdb(tmp_path / "apo.pdb", protein=4)
     source = TrajectorySource(topology=topology, trajectory=topology, phase="", multistate=False)
 
     measured = measure_repeat(source, "apo", 1)
 
     assert len(measured[0].times_ps) == 1
     assert np.isfinite(measured[0].times_ps[0])
+
+
+def test_phases_of_one_repeat_count_as_one_repeat() -> None:
+    """An alchemical repeat is measured twice, once per phase."""
+    metrics = [
+        RepeatMetrics(
+            run="lig",
+            repeat=1,
+            phase="complex",
+            ligand="UNK",
+            ligand_drift=[0.0, 1.0],
+            ligand_rmsd=[0.0, 1.0],
+        ),
+        RepeatMetrics(run="lig", repeat=1, phase="solvent", ligand="UNK", ligand_rmsd=[0.0, 4.0]),
+    ]
+
+    summary = summarize_run("lig", metrics)
+
+    assert summary.repeats == 1
+
+
+def test_solvent_flexing_is_not_averaged_into_the_bound_rmsd() -> None:
+    """A ligand's RMSD in a solvent box is its own flexing, not pose movement."""
+    metrics = [
+        RepeatMetrics(
+            run="lig",
+            repeat=1,
+            phase="complex",
+            ligand="UNK",
+            ligand_drift=[0.0, 1.0],
+            ligand_rmsd=[1.0, 1.0],
+        ),
+        RepeatMetrics(run="lig", repeat=1, phase="solvent", ligand="UNK", ligand_rmsd=[9.0, 9.0]),
+    ]
+
+    summary = summarize_run("lig", metrics)
+
+    assert summary.mean_ligand_rmsd == pytest.approx(1.0)

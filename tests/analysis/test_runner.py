@@ -6,9 +6,17 @@ import json
 from pathlib import Path
 from typing import Any
 
+import MDAnalysis as mda
 import pytest
 
-from helpers import DATA, abfe_campaign, network_campaign, write_phase_result, write_result
+from helpers import (
+    DATA,
+    abfe_campaign,
+    network_campaign,
+    write_mini_pdb,
+    write_phase_result,
+    write_result,
+)
 from openfe_api.analysis.experimental import Measurement
 from openfe_api.analysis.runner import analyze_campaign, read_predictions
 from openfe_api.campaign import Campaign, RunState
@@ -189,3 +197,66 @@ def test_a_campaign_with_nothing_finished_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(InputValidationError, match="no finished results"):
         read_predictions(campaign)
+
+
+def _measurable(campaign: Campaign, run: str, repeats: int) -> None:
+    """Give a run repeats whose topology also serves as a one-frame trajectory."""
+    for index in range(1, repeats + 1):
+        shared = (
+            campaign.directory / "runs" / run / f"repeat{index}" / "shared_SimUnit-abc_attempt_0"
+        )
+        shared.mkdir(parents=True, exist_ok=True)
+        topology = write_mini_pdb(shared / "equil_npt.pdb", protein=4, ligands=1)
+        universe = mda.Universe(topology)
+        atoms = universe.select_atoms("all")
+        with mda.Writer(str(shared / "simulation.xtc"), n_atoms=len(atoms)) as writer:
+            for shift in (0.0, 0.5):
+                atoms.positions = atoms.positions + shift
+                writer.write(atoms)
+
+
+def test_trajectories_are_left_alone_unless_asked_for(tmp_path: Path) -> None:
+    """Reading them costs minutes, so it is opt-in."""
+    campaign = _finished_abfe(tmp_path)
+
+    outcome = analyze_campaign(campaign)
+
+    assert outcome.stability == []
+    assert "trajectory" not in outcome.tables
+
+
+def test_a_campaign_with_no_trajectory_warns_rather_than_fails(tmp_path: Path) -> None:
+    campaign = _finished_abfe(tmp_path)
+
+    outcome = analyze_campaign(campaign, trajectories=True)
+
+    assert outcome.stability == []
+    assert any("no trajectory" in warning for warning in outcome.warnings)
+    assert outcome.figures["ranking"].is_file()
+
+
+def test_measuring_trajectories_writes_the_tables(tmp_path: Path) -> None:
+    campaign = _finished_abfe(tmp_path)
+    _measurable(campaign, "mini", repeats=2)
+
+    outcome = analyze_campaign(campaign, trajectories=True)
+
+    assert [entry.run for entry in outcome.stability] == ["mini"]
+    assert outcome.stability[0].repeats == 2
+    assert outcome.tables["trajectory"].is_file()
+    assert "run\trepeats" in outcome.tables["stability"].read_text(encoding="utf-8")
+
+
+def test_a_repeat_that_cannot_be_measured_is_reported_not_fatal(tmp_path: Path) -> None:
+    """One short or broken repeat must not cost the campaign its analysis."""
+    campaign = _finished_abfe(tmp_path)
+    _measurable(campaign, "mini", repeats=1)
+    broken = campaign.directory / "runs" / "mini" / "repeat2" / "shared_SimUnit-abc_attempt_0"
+    broken.mkdir(parents=True)
+    (broken / "equil_npt.pdb").write_text("CRYST1\nEND\n", encoding="utf-8")
+    (broken / "sim.xtc").write_bytes(b"not a trajectory")
+
+    outcome = analyze_campaign(campaign, trajectories=True)
+
+    assert outcome.stability
+    assert outcome.tables["trajectory"].is_file()

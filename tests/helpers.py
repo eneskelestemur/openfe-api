@@ -547,3 +547,44 @@ def network_campaign(
     campaign.set_state(edge, RunState.PLANNED)
     campaign.set_state(edge, RunState.SUBMITTED)
     return campaign
+
+
+def write_mini_pdb(path: Path, protein: int = 0, ligands: int = 0) -> Path:
+    """Write a minimal PDB: a CA-only protein and whole methane molecules named UNK.
+
+    Carries a box, explicit hydrogens and CONECT records, as the topologies OpenFE writes
+    do. The alignment needs the box, fragment detection needs the bonds, and the
+    symmetry-corrected RMSD converts to RDKit, which needs the hydrogens.
+    """
+    lines = ["CRYST1  100.000  100.000  100.000  90.00  90.00  90.00 P 1           1"]
+    serial = 1
+    for index in range(protein):
+        lines.append(
+            f"ATOM  {serial:5d}  CA  ALA A{index + 1:4d}    "
+            f"{index * 4.0:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00  0.00           C"
+        )
+        serial += 1
+
+    offsets = (
+        (0.0, 0.0, 0.0),
+        (0.6, 0.6, 0.6),
+        (-0.6, -0.6, 0.6),
+        (0.6, -0.6, -0.6),
+        (-0.6, 0.6, -0.6),
+    )
+    bonds: list[tuple[int, int]] = []
+    for residue in range(ligands):
+        carbon = serial
+        base = 10.0 + 5.0 * residue
+        for position, (dx, dy, dz) in enumerate(offsets):
+            element = "C" if position == 0 else "H"
+            lines.append(
+                f"HETATM{serial:5d}  {element}{position:<3d}UNK L{residue + 1:4d}    "
+                f"{base + dx:8.3f}{dy:8.3f}{dz:8.3f}  1.00  0.00           {element}"
+            )
+            serial += 1
+        bonds += [(carbon, carbon + offset) for offset in range(1, 5)]
+
+    lines += [f"CONECT{a:5d}{b:5d}" for a, b in bonds]
+    path.write_text("\n".join(lines) + "\nEND\n", encoding="utf-8")
+    return path

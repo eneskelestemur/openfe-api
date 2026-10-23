@@ -6,7 +6,18 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `--trajectories` on `openfe-api analyze`, and the matching field on the endpoint, measure
+  protein RMSD, ligand RMSD and ligand drift per repeat and aggregate them per run.
+- The overlap, exchange and convergence plots OpenFE writes are linked into `analysis/plots/`
+  under names saying which run and repeat they came from.
+
+### Changed
+
+- A symlink inside a campaign is served by the files endpoint; one pointing outside is not.
+- `mdanalysis`, `netCDF4` and `openfe-analysis` are declared rather than relied on arriving
+  with openfe.
 
 ## [0.2.0] - 2026-10-22
 
