@@ -18,7 +18,7 @@ Errors go to standard error and results to standard output, so output can be pip
 | `plan` | `CAMPAIGN_DIR` `[--only N]` `[-p N]` | Charges, transformations, cost, and a network's edges |
 | `submit` | `CAMPAIGN_DIR` `[--profiles F]` `[--only N]` `[--dry-run]` `[--force]` | Run or queue repeats |
 | `gather` | `CAMPAIGN_DIR` `[--only N]` `[--quiet]` | Results and quality checks |
-| `analyze` | Write figures and tables from a finished campaign | seconds |
+| `analyze` | `CAMPAIGN_DIR` `[--measured F]` `[--dark]` `[--trajectories]` `[--workers N]` `[--submit]` `[--profile P]` `[--profiles F]` `[--dry-run]` | Figures, tables and metrics |
 | `status` | `CAMPAIGN_DIR` | State of every run |
 | `version` | | Print the version |
 

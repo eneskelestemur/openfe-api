@@ -6,18 +6,35 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-23
+
 ### Added
 
 - `--trajectories` on `openfe-api analyze`, and the matching field on the endpoint, measure
   protein RMSD, ligand RMSD and ligand drift per repeat and aggregate them per run.
+- Interaction fingerprints over the pocket, as occupancy per residue and interaction type,
+  with every run in one heatmap.
+- A representative pose per run in `analysis/scenes/`: the frame nearest the ligand's median
+  position, as a PDB, a PyMOL script and a standalone py3Dmol page.
+- `--workers` measures several trajectories at once, and `--submit` runs the analysis as a
+  Slurm job, under the profile `--profile` names or the campaign's own.
 - The overlap, exchange and convergence plots OpenFE writes are linked into `analysis/plots/`
   under names saying which run and repeat they came from.
 
 ### Changed
 
+- An edge whose uncertainty comes out as zero, as one between two identical ligands does, no
+  longer costs the network its per-ligand fit: the solver reads it as 0.001 kcal/mol and says
+  so.
+- A measured column that is all positive, or predictions that run against the measurements,
+  are both called out: an affinity such as a pIC50 rises where a free energy falls.
+- A trajectory that fails for any reason is reported and the rest are measured, where only
+  our own errors were caught before.
+- `metrics.json` is written on every analysis, so the versions behind the figures and tables
+  are recorded even with nothing to correlate against.
 - A symlink inside a campaign is served by the files endpoint; one pointing outside is not.
 - `mdanalysis`, `netCDF4` and `openfe-analysis` are declared rather than relied on arriving
-  with openfe.
+  with openfe, and `prolif` and `py3Dmol` are added for the interactions and the scenes.
 
 ## [0.2.0] - 2026-10-22
 
@@ -107,7 +124,8 @@ First release. This entry describes what the project does.
   front and leaves simulation output out unless asked for.
 - Docker and Apptainer images carrying both entry points.
 
-[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/eneskelestemur/openfe-api/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/eneskelestemur/openfe-api/releases/tag/v0.1.0

@@ -8,7 +8,7 @@ tool, and a containerized HTTP service.
     Every protocol is implemented: absolute (ABFE), relative (RBFE) and separated topologies
     (SepTop) binding free energies, and plain MD. Each has run end to end on GPUs against a
     real series, but those runs were short plumbing checks, so no production-length numbers
-    have been produced yet. Structured analysis is planned.
+    have been produced yet.
 
 ## Why this exists
 

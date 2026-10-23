@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openfe-api"
-version = "0.2.0"
+version = "0.3.0"
 description = "An API for running OpenFE free energy experiments on HPC and server VMs."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,6 +24,8 @@ dependencies = [
     "mdanalysis>=2.7",
     "netCDF4>=1.6",
     "openfe-analysis>=0.5",
+    "prolif>=2.2",
+    "py3Dmol>=2.1",
     "pydantic>=2.9",
     "pydantic-settings>=2.4",
     "typer>=0.12",
@@ -52,7 +54,7 @@ where = ["src"]
 
 # PEP 561: without this marker a downstream type checker ignores the annotations.
 [tool.setuptools.package-data]
-openfe_api = ["py.typed"]
+openfe_api = ["py.typed", "analysis/templates/*.pml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

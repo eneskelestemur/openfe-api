@@ -6,9 +6,9 @@ containerized FastAPI service.
 
 **[Documentation](https://eneskelestemur.github.io/openfe-api/)**
 
-Status: early development, version 0.1.0. Every protocol is implemented and has run end to end
-on GPUs, but only at smoke lengths, so no production numbers have been produced yet. Structured
-analysis of trajectories is the next milestone.
+Status: early development, version 0.3.0. Every protocol is implemented and has run end to end
+on GPUs, but only at smoke lengths, so no production numbers have been produced yet. Analysis
+covers correlation against measurement, trajectory stability and pocket interactions.
 
 ## Why
 
@@ -180,7 +180,9 @@ The rest of the stack this depends on, directly or through OpenFE:
 | [AmberTools](https://ambermd.org/AmberTools.php) | AM1BCC partial charges |
 | [RDKit](https://www.rdkit.org/) | molecule building, the MCS search, and Open3DAlign pose placement |
 | [PDBFixer](https://github.com/openmm/pdbfixer) | completing residues and adding hydrogens |
-| [MDAnalysis](https://www.mdanalysis.org/) | trajectory handling |
+| [MDAnalysis](https://www.mdanalysis.org/) and [openfe-analysis](https://github.com/OpenFreeEnergy/openfe-analysis) | trajectory handling, and reading a multistate trajectory at one state |
+| [ProLIF](https://prolif.readthedocs.io/) | the interaction fingerprints over the pocket |
+| [matplotlib](https://matplotlib.org/) and [py3Dmol](https://github.com/3dmol/3Dmol.js) | the figures and the in-browser pose viewer |
 | [LOMAP](https://github.com/OpenFreeEnergy/Lomap) and [Kartograf](https://github.com/OpenFreeEnergy/kartograf) | atom mappers and edge scoring |
 | [konnektor](https://github.com/OpenFreeEnergy/konnektor) | the network generators behind RBFE planning |
 | [PyMBAR](https://github.com/choderalab/pymbar) | the MBAR estimates and their uncertainties |
@@ -188,6 +190,12 @@ The rest of the stack this depends on, directly or through OpenFE:
 | [pydantic](https://docs.pydantic.dev/) | the request schema and its error messages |
 | [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/) | the CLI and its console output |
 | [FastAPI](https://fastapi.tiangolo.com/) and [uvicorn](https://github.com/encode/uvicorn) | the HTTP service |
+
+### Claude
+
+Much of this code was written with [Claude](https://claude.com/claude-code), Anthropic's
+coding assistant, working from the design and the implementation rules set for this project.
+Every change was reviewed, run and tested before it landed here.
 
 ## License
 

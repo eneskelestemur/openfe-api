@@ -16,6 +16,7 @@ dependencies:
   - matplotlib-base
   - netcdf4
   - openfe-analysis
+  - prolif
   - openff-nagl
   - ambertools
   - pydantic>=2.9
@@ -29,3 +30,4 @@ dependencies:
       - fastapi>=0.110
       - uvicorn>=0.30
       - python-multipart>=0.0.18
+      - py3Dmol>=2.1

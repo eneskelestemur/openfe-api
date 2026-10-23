@@ -145,6 +145,12 @@ run and a `last_operation` record:
 A failure inside a background task is therefore still visible. One campaign runs one
 operation at a time; a duplicate request while it is busy is ignored and logged.
 
+The analysis endpoint is answered in the request instead, since it reads what is already on
+disk and changes nothing. With `trajectories` set it reads every trajectory, which on a
+production campaign is minutes to hours: raise `workers` to use the machine's cores, and
+set a client timeout to match. For a campaign that large, `openfe-api analyze --submit`
+hands the same work to Slurm rather than holding a connection open for it.
+
 ## Configuration
 
 Every setting is an environment variable prefixed with `OPENFE_API_`. See `.env.example`.
