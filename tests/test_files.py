@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from helpers import abfe_campaign
+from openfe_api.analysis.collected import collect_plots
 from openfe_api.campaign import SUBDIRECTORIES, Campaign
 from openfe_api.exceptions import InputValidationError
 from openfe_api.files import (
@@ -120,12 +121,34 @@ def test_resolving_refuses_a_symlink_that_escapes(tmp_path: Path) -> None:
         resolve_file(campaign, "results/link.txt")
 
 
-def test_a_symlink_is_left_out_of_the_listing(tmp_path: Path) -> None:
+def test_a_symlink_inside_the_campaign_is_listed(tmp_path: Path) -> None:
+    """The analysis links OpenFE's own plots in from runs/, and they have to be reachable."""
     campaign = abfe_campaign(tmp_path, planned=False)
     _populate(campaign)
     (campaign.directory / "results" / "link.tsv").symlink_to(
         campaign.directory / "results" / "results.tsv"
     )
+
+    listed = [entry.path for entry in list_files(campaign, ["results"])]
+
+    assert sorted(listed) == ["results/link.tsv", "results/results.tsv"]
+
+
+def test_a_symlink_leaving_the_campaign_is_left_out(tmp_path: Path) -> None:
+    campaign = abfe_campaign(tmp_path, planned=False)
+    _populate(campaign)
+    (tmp_path / "outside.tsv").write_text("secret", encoding="utf-8")
+    (campaign.directory / "results" / "escape.tsv").symlink_to(tmp_path / "outside.tsv")
+
+    listed = [entry.path for entry in list_files(campaign, ["results"])]
+
+    assert listed == ["results/results.tsv"]
+
+
+def test_a_broken_symlink_is_left_out(tmp_path: Path) -> None:
+    campaign = abfe_campaign(tmp_path, planned=False)
+    _populate(campaign)
+    (campaign.directory / "results" / "dangling.tsv").symlink_to(tmp_path / "never_written.tsv")
 
     assert [entry.path for entry in list_files(campaign, ["results"])] == ["results/results.tsv"]
 
@@ -197,3 +220,31 @@ def test_the_promised_length_holds_when_a_file_changes_mid_stream(
     assert archive_size(listed) == len(blob)
     with tarfile.open(fileobj=io.BytesIO(blob)) as archive:
         assert sorted(archive.getnames()) == sorted(entry.path for entry in listed)
+
+
+def test_a_linked_plot_is_served_and_archived(tmp_path: Path) -> None:
+    """The analysis links OpenFE's plots in from runs/, which the archive must dereference."""
+    campaign = abfe_campaign(tmp_path, planned=False)
+    source = (
+        campaign.directory
+        / "runs"
+        / "mini"
+        / "repeat1"
+        / "shared_ABFEComplexAnalysisUnit-abc_attempt_0"
+        / "mbar_overlap_matrix.png"
+    )
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"\x89PNG-content")
+    collect_plots(campaign)
+
+    listed = list_files(campaign, ["analysis"])
+    blob = b"".join(stream_archive(campaign, listed))
+
+    assert [entry.path for entry in listed] == [
+        "analysis/plots/mini_repeat1_complex_mbar_overlap_matrix.png"
+    ]
+    assert archive_size(listed) == len(blob)
+    with tarfile.open(fileobj=io.BytesIO(blob)) as archive:
+        member = archive.extractfile(listed[0].path)
+        assert member is not None
+        assert member.read() == b"\x89PNG-content"

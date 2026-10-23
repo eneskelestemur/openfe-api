@@ -97,7 +97,9 @@ def list_files(
         if not directory.is_dir():
             continue
         for path in sorted(directory.rglob("*")):
-            if not path.is_file() or path.is_symlink():
+            if not path.is_file():
+                continue
+            if path.is_symlink() and not path.resolve().is_relative_to(root):
                 continue
             stat = path.stat()
             found.append(
