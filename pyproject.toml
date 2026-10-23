@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = [
     "matplotlib>=3.8",
+    "mdanalysis>=2.7",
+    "netCDF4>=1.6",
+    "openfe-analysis>=0.5",
     "pydantic>=2.9",
     "pydantic-settings>=2.4",
     "typer>=0.12",

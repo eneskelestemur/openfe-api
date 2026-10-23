@@ -14,6 +14,8 @@ dependencies:
   - rdkit
   - mdanalysis
   - matplotlib-base
+  - netcdf4
+  - openfe-analysis
   - openff-nagl
   - ambertools
   - pydantic>=2.9
