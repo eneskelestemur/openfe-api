@@ -272,10 +272,7 @@ def _measure(
                 ligand=label,
                 times_ps=times,
                 protein_rmsd=protein_rmsd,
-                ligand_rmsd=[
-                    float(value)
-                    for value in SymmetryCorrectedLigandRMSD(ligand).run().results["rmsd"]
-                ],
+                ligand_rmsd=_ligand_rmsd(ligand, source),
                 ligand_drift=(
                     [float(value) for value in LigandCOMDrift(ligand).run().results["com_drift"]]
                     if len(backbone)
@@ -293,6 +290,24 @@ def _measure(
             max(measured[-1].ligand_drift, default=0.0),
         )
     return measured
+
+
+def _ligand_rmsd(ligand: mda.AtomGroup, source: TrajectorySource) -> list[float]:
+    """Return per-frame ligand RMSD, symmetry corrected where the chemistry allows it.
+
+    A relative hybrid topology fuses both ligands of an edge onto shared atoms, so it does
+    not convert to a valid molecule and the symmetry correction cannot run on it.
+    """
+    try:
+        values = SymmetryCorrectedLigandRMSD(ligand).run().results["rmsd"]
+    except Exception as error:
+        logger.warning(
+            "Symmetry-corrected RMSD is unavailable for %s (%s); measuring without it",
+            source.trajectory.name,
+            type(error).__name__,
+        )
+        values = RMSDAnalysis(ligand, superposition=True).run().results["rmsd"]
+    return [float(value) for value in values]
 
 
 def summarize_run(run: str, metrics: list[RepeatMetrics]) -> RunStability:

@@ -24,8 +24,15 @@ PLOT_NAMES = (
     "replica_exchange_matrix.png",
     "replica_state_timeseries.png",
     "forward_reverse_convergence.png",
+    "ligand_RMSD.png",
+    "ligand_COM_drift.png",
+    "protein_2D_RMSD.png",
 )
-"""The plots an OpenFE analysis unit writes."""
+"""The plots an OpenFE unit writes. The last three come from a relative hybrid topology run.
+
+Its drift plot is measured without aligning the trajectory, so it shows the ligand jumping a
+box length whenever it crosses a periodic boundary. ``stability.png`` is the aligned answer.
+"""
 
 PLOTS_DIR = "plots"
 

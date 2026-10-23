@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -256,8 +257,17 @@ def measure_trajectories(
         # Spawned rather than forked: the readers hold netCDF and HDF5 handles, which do not
         # survive a fork reliably.
         context = multiprocessing.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
-            outcomes = list(pool.map(_measure_one, items))
+        try:
+            with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+                outcomes = list(pool.map(_measure_one, items))
+        except BrokenProcessPool:
+            # A worker killed outright, usually for memory, cannot report anything back.
+            logger.warning(
+                "A worker died with %d of them running; measuring the rest one at a time. "
+                "Lower --workers or ask for more memory.",
+                workers,
+            )
+            outcomes = [_measure_one(item) for item in items]
 
     measured: list[RepeatMetrics] = []
     skipped: list[str] = []
