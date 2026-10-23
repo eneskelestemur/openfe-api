@@ -9,7 +9,12 @@ from matplotlib import colors, image
 
 from openfe_api.analysis.correlation import Correlation, Prediction, correlate
 from openfe_api.analysis.experimental import Measurement
-from openfe_api.analysis.figures import LABEL_LIMIT, correlation_figure, ranking_figure
+from openfe_api.analysis.figures import (
+    LABEL_LIMIT,
+    _run_labels,
+    correlation_figure,
+    ranking_figure,
+)
 from openfe_api.analysis.style import DARK, LIGHT, Theme, theme_for
 
 
@@ -89,3 +94,22 @@ def test_the_directory_is_created(tmp_path: Path) -> None:
     )
 
     assert written.is_file()
+
+
+def test_run_labels_drop_the_prefix_every_edge_shares() -> None:
+    """Edge names repeat the protein and the reference ligand, which crowds out the plot."""
+    labels = _run_labels(
+        ["pgk2_lig_a_to_pgk2_lig_x", "pgk2_lig_a_to_pgk2_lig_y", "pgk2_lig_a_to_pgk2_lig_z"]
+    )
+
+    assert labels == ["x", "y", "z"]
+
+
+def test_a_single_run_keeps_its_name() -> None:
+    assert _run_labels(["pgk2_lig_a_to_pgk2_lig_x"]) == ["pgk2_lig_a_to_pgk2_lig_x"]
+
+
+def test_a_long_label_is_cut_rather_than_left_to_overflow() -> None:
+    labels = _run_labels(["short", "a" * 60], limit=10)
+
+    assert labels[1] == "a" * 9 + "\u2026"

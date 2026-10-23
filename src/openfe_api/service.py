@@ -364,11 +364,14 @@ class AnalysisRequest(BaseModel):
         dark: Whether to draw the figures for a dark background.
         trajectories: Whether to measure how far each ligand moved during its run. This
             reads the trajectories, so the request takes minutes rather than a second.
+        workers: How many trajectories to measure at once. Worth raising on a machine with
+            cores to spare, where each trajectory takes minutes to read.
     """
 
     measured: dict[str, float | MeasuredValue] = Field(default_factory=dict)
     dark: bool = False
     trajectories: bool = False
+    workers: int = Field(default=1, ge=1)
 
 
 class RunDrift(BaseModel):
@@ -377,7 +380,7 @@ class RunDrift(BaseModel):
     Attributes:
         run: Run name.
         repeats: Repeats measured.
-        mean_drift: Mean centre-of-mass drift in angstrom.
+        mean_drift: Mean center-of-mass drift in angstrom.
         max_drift: Largest drift any frame reached, in angstrom.
         worst_repeat: The repeat holding that largest drift.
     """
@@ -959,7 +962,8 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
         Args:
             name: Campaign name.
-            body: Measured values to compare against, and the figure background.
+            body: Measured values to compare against, the figure background, and how much
+                of the machine to use for the trajectories.
             settings: Service settings.
 
         Returns:
@@ -981,7 +985,11 @@ def create_app(settings: ServiceSettings | None = None) -> FastAPI:
 
         try:
             outcome = analyze_campaign(
-                campaign, measurements or None, dark=body.dark, trajectories=body.trajectories
+                campaign,
+                measurements or None,
+                dark=body.dark,
+                trajectories=body.trajectories,
+                workers=body.workers,
             )
         except InputValidationError as error:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error

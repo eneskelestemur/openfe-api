@@ -17,6 +17,7 @@ from rich.table import Table
 
 from openfe_api import __version__
 from openfe_api.analysis.runner import analyze_campaign
+from openfe_api.analysis.submit import submit_analysis
 from openfe_api.campaign import Campaign, RunState
 from openfe_api.exceptions import OpenFEAPIError
 from openfe_api.execution.runner import load_profile, relax_campaign, submit_campaign
@@ -823,6 +824,32 @@ def analyze(
             "start, so it loses on short ones.",
         ),
     ] = 1,
+    submit: Annotated[
+        bool,
+        typer.Option(
+            "--submit",
+            help="Run the analysis as a Slurm job instead of here, under the profile "
+            "--profile names or the campaign's own. Worth it with --trajectories, which "
+            "reads every trajectory and so belongs on a compute node.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="With --submit, write the batch script without submitting."),
+    ] = False,
+    profiles_file: Annotated[
+        Path | None,
+        typer.Option("--profiles", help="YAML file of execution profiles."),
+    ] = None,
+    profile_name: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Profile for the analysis job, overriding the campaign's. Measuring "
+            "trajectories needs cores rather than a GPU, so a CPU profile usually fits "
+            "better than the one the simulations ran under.",
+        ),
+    ] = None,
 ) -> None:
     """Write a campaign's figures and tables, without changing the campaign.
 
@@ -835,7 +862,24 @@ def analyze(
         dark: Whether to draw for a dark background.
         trajectories: Whether to measure ligand and protein movement as well.
         workers: How many trajectories to measure at once.
+        submit: Whether to run the analysis as a Slurm job.
+        dry_run: Whether to write the batch script without submitting it.
+        profiles_file: YAML file holding execution profiles.
+        profile_name: Profile for the analysis job; the campaign's if omitted.
     """
+    if submit:
+        _submit_analysis(
+            campaign_dir,
+            measured,
+            dark,
+            trajectories,
+            workers,
+            dry_run,
+            profiles_file,
+            profile_name,
+        )
+        return
+
     try:
         campaign = Campaign.open(campaign_dir)
         outcome = analyze_campaign(
@@ -892,6 +936,45 @@ def analyze(
         console.print(f"{name}: {path}")
     for name, path in sorted(outcome.tables.items()):
         console.print(f"{name}: {path}")
+
+
+def _submit_analysis(
+    campaign_dir: Path,
+    measured: Path | None,
+    dark: bool,
+    trajectories: bool,
+    workers: int,
+    dry_run: bool,
+    profiles_file: Path | None,
+    profile_name: str | None,
+) -> None:
+    """Hand the analysis to Slurm and report what was submitted."""
+    try:
+        campaign = Campaign.open(campaign_dir)
+        profile = load_profile(
+            profile_name or campaign.manifest.request.execution.profile, profiles_file
+        )
+        submission = submit_analysis(
+            campaign,
+            profile,
+            measured=measured,
+            dark=dark,
+            trajectories=trajectories,
+            workers=workers,
+            dry_run=dry_run,
+        )
+    except OpenFEAPIError as error:
+        _fail(error)
+        return
+
+    console.print(f"script: {submission.script}")
+    if submission.job_id is None:
+        console.print("Dry run: nothing was submitted.")
+    else:
+        console.print(
+            f"Submitted as job [bold]{submission.job_id}[/bold] "
+            f"with {submission.cpus} core(s). Results land in the campaign's analysis/."
+        )
 
 
 @app.command()

@@ -7,7 +7,18 @@ from importlib.metadata import PackageNotFoundError, version
 
 __all__ = ["collect_provenance"]
 
-_TRACKED_PACKAGES = ("openfe-api", "openfe", "gufe", "openmm", "rdkit", "pydantic")
+_TRACKED_PACKAGES = (
+    "openfe-api",
+    "openfe",
+    "gufe",
+    "openmm",
+    "rdkit",
+    "pydantic",
+    "mdanalysis",
+    "openfe-analysis",
+    "prolif",
+    "py3Dmol",
+)
 
 
 def collect_provenance() -> dict[str, str]:

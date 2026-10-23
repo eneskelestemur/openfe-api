@@ -13,6 +13,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from openfe_api.campaign import LOGS_DIR
 from openfe_api.exceptions import OpenFEAPIError
 from openfe_api.execution.base import Task, quickrun_command
 from openfe_api.execution.mps import mps_shell_lines
@@ -22,8 +23,10 @@ from openfe_api.schema.profiles import ExecutionProfile
 __all__ = [
     "ArraySubmission",
     "SlurmSubmission",
+    "batch_directives",
     "group_tasks",
     "render_script",
+    "sbatch",
     "submit_to_slurm",
 ]
 
@@ -113,28 +116,54 @@ def group_tasks(tasks: list[Task], jobs_per_gpu: int) -> list[list[Task]]:
     return [tasks[start : start + jobs_per_gpu] for start in range(0, len(tasks), jobs_per_gpu)]
 
 
-def _directives(
+def batch_directives(
     profile: ExecutionProfile,
+    tag: str,
     campaign_dir: Path,
-    n_groups: int,
-    cost_class: str,
+    time: str,
+    cpus: int,
+    array: int | None = None,
 ) -> list[str]:
-    """Build the ``#SBATCH`` lines for one array."""
+    """Build the ``#SBATCH`` lines for one job.
+
+    Partition, QoS, account, memory, GRES and any extra directives come from the profile
+    as written, so a cluster's own requirements are never second-guessed here.
+
+    Args:
+        profile: The execution profile, which must configure Slurm.
+        tag: Short name for the job and its log files.
+        campaign_dir: Campaign directory, under which logs are written.
+        time: Wall time limit for this job.
+        cpus: Cores to request.
+        array: Number of array elements, or None for a single job.
+
+    Returns:
+        The directive lines, each already prefixed with ``#SBATCH``.
+
+    Raises:
+        OpenFEAPIError: If the profile has no Slurm section.
+    """
     if profile.slurm is None:
         raise OpenFEAPIError(f"profile '{profile.name}' has no 'slurm' section")
 
     slurm = profile.slurm
-    logs = campaign_dir / "logs"
+    logs = campaign_dir / LOGS_DIR
+    suffix = "%A_%a" if array is not None else "%j"
     lines = [
-        f"#SBATCH --job-name=openfe-api-{cost_class}",
+        f"#SBATCH --job-name=openfe-api-{tag}",
         f"#SBATCH --partition={slurm.partition}",
-        f"#SBATCH --time={slurm.time_by_class.get(cost_class, slurm.time)}",
-        f"#SBATCH --cpus-per-task={slurm.cpus_per_task}",
+        f"#SBATCH --time={time}",
+        f"#SBATCH --cpus-per-task={cpus}",
         f"#SBATCH --mem={slurm.memory}",
-        f"#SBATCH --array=0-{n_groups - 1}",
-        f"#SBATCH --output={logs}/openfe_{cost_class}_%A_%a.out",
-        f"#SBATCH --error={logs}/openfe_{cost_class}_%A_%a.err",
     ]
+    if array is not None:
+        lines.append(f"#SBATCH --array=0-{array - 1}")
+    lines.extend(
+        [
+            f"#SBATCH --output={logs}/openfe_{tag}_{suffix}.out",
+            f"#SBATCH --error={logs}/openfe_{tag}_{suffix}.err",
+        ]
+    )
     if slurm.gres:
         lines.append(f"#SBATCH --gres={slurm.gres}")
     if slurm.qos:
@@ -143,6 +172,13 @@ def _directives(
         lines.append(f"#SBATCH --account={slurm.account}")
     lines.extend(f"#SBATCH {directive}" for directive in slurm.extra_directives)
     return lines
+
+
+def _class_time(profile: ExecutionProfile, cost_class: str) -> str:
+    """Return the wall time this cost class asks for."""
+    if profile.slurm is None:
+        raise OpenFEAPIError(f"profile '{profile.name}' has no 'slurm' section")
+    return profile.slurm.time_by_class.get(cost_class, profile.slurm.time)
 
 
 def render_script(
@@ -167,7 +203,14 @@ def render_script(
     """
     lines = [
         "#!/bin/bash",
-        *_directives(profile, campaign_dir, len(groups), cost_class),
+        *batch_directives(
+            profile,
+            cost_class,
+            campaign_dir,
+            _class_time(profile, cost_class),
+            profile.slurm.cpus_per_task if profile.slurm else 1,
+            array=len(groups),
+        ),
         "",
         "set -euo pipefail",
         "",
@@ -254,7 +297,7 @@ def submit_to_slurm(
     for task in tasks:
         by_class.setdefault(task.cost_class, []).append(task)
 
-    (campaign_dir / "logs").mkdir(parents=True, exist_ok=True)
+    (campaign_dir / LOGS_DIR).mkdir(parents=True, exist_ok=True)
     arrays: list[ArraySubmission] = []
 
     for cost_class in sorted(by_class):
@@ -282,7 +325,7 @@ def submit_to_slurm(
         arrays.append(
             ArraySubmission(
                 cost_class=cost_class,
-                job_id=_sbatch(script_path),
+                job_id=sbatch(script_path),
                 script=script_path,
                 groups=groups,
             )
@@ -297,8 +340,18 @@ def submit_to_slurm(
     return SlurmSubmission(arrays=arrays)
 
 
-def _sbatch(script_path: Path) -> str:
-    """Submit a script and return its job identifier."""
+def sbatch(script_path: Path) -> str:
+    """Submit a script to Slurm.
+
+    Args:
+        script_path: The batch script to submit.
+
+    Returns:
+        The job identifier sbatch reported.
+
+    Raises:
+        OpenFEAPIError: If sbatch is unavailable or rejects the submission.
+    """
     if shutil.which("sbatch") is None:
         raise OpenFEAPIError(
             "sbatch was not found on this machine. Run where Slurm is available, or use "

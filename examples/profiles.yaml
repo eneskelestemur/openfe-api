@@ -34,6 +34,20 @@ cluster_gpu_large:
     extra_directives:
       - --account=my_account
 
+# Reading trajectories is CPU work, so 'openfe-api analyze --submit --profile cpu' runs
+# where there is no GPU to waste.
+cpu:
+  backend: slurm
+  setup_commands:
+    - source ~/.bashrc
+    - conda activate openfe-api
+  slurm:
+    partition: cpu
+    time: '4:00:00'        # or time_by_class: {analysis: '8:00:00'} for the analysis job
+    gres:                  # no GPU
+    cpus_per_task: 16
+    memory: 64G
+
 # A single machine or a server VM, with no scheduler.
 workstation:
   backend: local

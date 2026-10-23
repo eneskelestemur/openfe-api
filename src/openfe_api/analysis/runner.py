@@ -23,6 +23,7 @@ from openfe_api.analysis.figures import (
     stability_figure,
 )
 from openfe_api.analysis.interactions import ResidueContact, measure_interactions
+from openfe_api.analysis.scenes import SCENES_DIR, Scene, write_scene
 from openfe_api.analysis.style import Theme, theme_for
 from openfe_api.analysis.trajectory import (
     RepeatMetrics,
@@ -84,6 +85,7 @@ class AnalysisOutcome:
         predictions: The calculated free energies the analysis read.
         correlation: The comparison against measured values, when any were given.
         stability: One aggregate per run whose trajectories were measured.
+        scenes: One representative pose per run, when the trajectories were measured.
         figures: Figures written, keyed by what each one shows.
         tables: Tables written, keyed by what each one holds.
         warnings: Concerns the reader should know about.
@@ -94,6 +96,7 @@ class AnalysisOutcome:
     predictions: list[Prediction] = field(default_factory=list)
     correlation: Correlation | None = None
     stability: list[RunStability] = field(default_factory=list)
+    scenes: list[Scene] = field(default_factory=list)
     figures: dict[str, Path] = field(default_factory=dict)
     tables: dict[str, Path] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
@@ -186,19 +189,23 @@ def _write_correlation(outcome: Correlation, path: Path) -> Path:
     return path
 
 
-def _write_metrics(outcome: Correlation, path: Path) -> Path:
-    """Write the metrics as JSON, so a caller can read them without parsing a figure."""
-    payload = {
-        "paired": len(outcome.paired),
-        "predicted_only": len(outcome.predicted_only),
-        "unmatched": outcome.unmatched,
-        "aligned": outcome.aligned,
-        "shift_kcal_per_mol": outcome.shift,
-        "pearson": outcome.pearson,
-        "spearman": outcome.spearman,
-        "kendall": outcome.kendall,
-        "mue_kcal_per_mol": outcome.mue,
-        "rmse_kcal_per_mol": outcome.rmse,
+def _write_metrics(outcome: Correlation | None, path: Path) -> Path:
+    """Write the metrics as JSON, so a caller can read them without parsing a figure.
+
+    Written whether or not anything was measured: it is also where the versions behind
+    every other file in the directory are recorded.
+    """
+    payload: dict[str, object] = {
+        "paired": len(outcome.paired) if outcome else 0,
+        "predicted_only": len(outcome.predicted_only) if outcome else 0,
+        "unmatched": outcome.unmatched if outcome else [],
+        "aligned": outcome.aligned if outcome else False,
+        "shift_kcal_per_mol": outcome.shift if outcome else None,
+        "pearson": outcome.pearson if outcome else None,
+        "spearman": outcome.spearman if outcome else None,
+        "kendall": outcome.kendall if outcome else None,
+        "mue_kcal_per_mol": outcome.mue if outcome else None,
+        "rmse_kcal_per_mol": outcome.rmse if outcome else None,
         "provenance": collect_provenance(),
     }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -229,13 +236,16 @@ def _measure_one(
 ) -> tuple[list[RepeatMetrics], list[ResidueContact], str | None]:
     """Measure one trajectory, returning the failure instead of raising it.
 
-    A worker process cannot let an exception escape without taking the pool down with it.
+    Any failure is caught, not only ours: a worker that raises takes the pool down with it,
+    and one unreadable repeat should not cost a campaign an hour of measurement.
     """
     source, run, repeat = item
     try:
         return measure_repeat(source, run, repeat), measure_interactions(source, run, repeat), None
     except OpenFEAPIError as error:
         return [], [], str(error)
+    except Exception as error:
+        return [], [], f"{source.trajectory}: {type(error).__name__}: {error}"
 
 
 def measure_trajectories(
@@ -401,12 +411,14 @@ def analyze_campaign(
         _add_trajectories(campaign, outcome, theme, directory, workers)
 
     if measurements is None or not predictions:
+        outcome.tables["metrics"] = _write_metrics(None, directory / METRICS_FILE)
         logger.info("Analyzed '%s': %d ligand(s), no measured values", name, len(predictions))
         return outcome
 
     table = read_measurements(measurements) if isinstance(measurements, Path) else measurements
     correlation = correlate(predictions, table, aligned=relative)
     outcome.correlation = correlation
+    outcome.tables["metrics"] = _write_metrics(correlation, directory / METRICS_FILE)
     if correlation.unmatched:
         outcome.warnings.append(
             f"{len(correlation.unmatched)} measured ligand(s) are not in the campaign: "
@@ -418,8 +430,14 @@ def analyze_campaign(
         )
         return outcome
 
+    if correlation.pearson is not None and correlation.pearson < 0.0:
+        outcome.warnings.append(
+            f"the predictions run against the measurements (Pearson R = {correlation.pearson:.2f})"
+            ". Check that the measured column is a dG in kcal/mol: an affinity such as a pIC50 "
+            "rises where a free energy falls, which reads as an anti-correlation."
+        )
+
     outcome.tables["correlation"] = _write_correlation(correlation, directory / CORRELATION_TABLE)
-    outcome.tables["metrics"] = _write_metrics(correlation, directory / METRICS_FILE)
     outcome.figures["correlation"] = correlation_figure(
         correlation, f"{name} · predicted vs measured", theme, directory / CORRELATION_FIGURE
     )
@@ -463,6 +481,10 @@ def _add_trajectories(
         except ValueError:
             outcome.warnings.append("only van der Waals contacts were found, so no heatmap")
 
+    outcome.scenes = _write_scenes(campaign, directory)
+    for scene in outcome.scenes:
+        outcome.figures[f"{scene.run}_scene"] = scene.page
+
     try:
         outcome.figures["stability"] = stability_figure(
             outcome.stability,
@@ -487,3 +509,18 @@ def _write_interactions(contacts: list[ResidueContact], path: Path) -> Path:
         lines.append(f"{run}\t{ligand}\t{residue}\t{interaction}\t{mean:.4f}\t{len(values)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+def _write_scenes(campaign: Campaign, directory: Path) -> list[Scene]:
+    """Write one representative pose per run, skipping runs that have no ligand."""
+    scenes: list[Scene] = []
+    seen: set[str] = set()
+    for source, run, repeat in _work_items(campaign):
+        if run in seen or repeat != 1:
+            continue
+        try:
+            scenes.append(write_scene(source, run, directory / SCENES_DIR))
+            seen.add(run)
+        except OpenFEAPIError as error:
+            logger.debug("No scene for '%s': %s", run, error)
+    return scenes

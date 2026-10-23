@@ -26,9 +26,19 @@ def test_a_system_without_a_ligand_has_no_contacts(tmp_path: Path) -> None:
     assert measure_interactions(_source(topology), "apo", 1) == []
 
 
+def test_contacts_are_found_for_a_ligand_against_a_protein(tmp_path: Path) -> None:
+    topology = write_mini_pdb(tmp_path / "complex.pdb", protein=6, ligands=1)
+
+    contacts = measure_interactions(_source(topology), "complex", 1)
+
+    assert contacts
+    assert all(0.0 < entry.occupancy <= 1.0 for entry in contacts)
+    assert all(entry.run == "complex" for entry in contacts)
+
+
 def test_a_ligand_far_from_the_protein_has_no_contacts(tmp_path: Path) -> None:
     """The pocket is what sits near the ligand; nothing near it means nothing to report."""
-    topology = write_mini_pdb(tmp_path / "far.pdb", protein=4, ligands=1)
+    topology = write_mini_pdb(tmp_path / "far.pdb", protein=4, ligands=1, ligand_offset=60.0)
 
     assert measure_interactions(_source(topology), "far", 1) == []
 

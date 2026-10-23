@@ -33,6 +33,7 @@ __all__ = [
     "network_campaign",
     "overlap_matrix",
     "write_md_result",
+    "write_mini_pdb",
     "write_phase_result",
     "write_result",
     "write_result_file",
@@ -549,7 +550,9 @@ def network_campaign(
     return campaign
 
 
-def write_mini_pdb(path: Path, protein: int = 0, ligands: int = 0) -> Path:
+def write_mini_pdb(
+    path: Path, protein: int = 0, ligands: int = 0, ligand_offset: float = 10.0
+) -> Path:
     """Write a minimal PDB: a CA-only protein and whole methane molecules named UNK.
 
     Carries a box, explicit hydrogens and CONECT records, as the topologies OpenFE writes
@@ -561,7 +564,8 @@ def write_mini_pdb(path: Path, protein: int = 0, ligands: int = 0) -> Path:
     for index in range(protein):
         lines.append(
             f"ATOM  {serial:5d}  CA  ALA A{index + 1:4d}    "
-            f"{index * 4.0:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00  0.00           C"
+            f"{index * 3.8:8.3f}{(index % 3) * 2.4:8.3f}{(index % 2) * 3.1:8.3f}"
+            f"  1.00  0.00           C"
         )
         serial += 1
 
@@ -575,7 +579,7 @@ def write_mini_pdb(path: Path, protein: int = 0, ligands: int = 0) -> Path:
     bonds: list[tuple[int, int]] = []
     for residue in range(ligands):
         carbon = serial
-        base = 10.0 + 5.0 * residue
+        base = ligand_offset + 5.0 * residue
         for position, (dx, dy, dz) in enumerate(offsets):
             element = "C" if position == 0 else "H"
             lines.append(

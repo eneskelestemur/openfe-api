@@ -132,6 +132,18 @@ def test_the_metrics_record_provenance(tmp_path: Path) -> None:
     assert "openfe" in payload["provenance"]
 
 
+def test_provenance_is_recorded_without_any_measurement(tmp_path: Path) -> None:
+    """Rule 20 again: a trajectories-only analysis still has to say what produced it."""
+    campaign = _finished_abfe(tmp_path)
+
+    outcome = analyze_campaign(campaign)
+
+    payload = json.loads(outcome.tables["metrics"].read_text(encoding="utf-8"))
+    assert payload["paired"] == 0
+    assert payload["pearson"] is None
+    assert "mdanalysis" in payload["provenance"]
+
+
 def test_everything_lands_in_the_analysis_directory(tmp_path: Path) -> None:
     campaign = _finished_abfe(tmp_path)
 
@@ -293,3 +305,34 @@ def test_a_failure_in_one_worker_does_not_take_the_pool_down(tmp_path: Path) -> 
     metrics, _, _ = measure_trajectories(campaign, workers=2)
 
     assert [entry.repeat for entry in metrics] == [1]
+
+
+def test_an_unexpected_failure_is_reported_not_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reader raising something of its own must not cost the campaign the whole run."""
+    campaign = _finished_abfe(tmp_path)
+    _measurable(campaign, "mini", repeats=1)
+
+    def explode(*_: object) -> None:
+        raise RuntimeError("the reader gave up")
+
+    monkeypatch.setattr("openfe_api.analysis.runner.measure_repeat", explode)
+
+    metrics, _, skipped = measure_trajectories(campaign, workers=1)
+
+    assert metrics == []
+    assert len(skipped) == 1
+    assert "RuntimeError: the reader gave up" in skipped[0]
+
+
+def test_an_anti_correlated_campaign_says_so(tmp_path: Path) -> None:
+    """Predictions running against measurement usually means the wrong column was given."""
+    campaign = _finished_network(tmp_path)
+    measured = {"a": Measurement("a", -9.0), "b": Measurement("b", -6.0)}
+
+    outcome = analyze_campaign(campaign, measured)
+
+    assert outcome.correlation is not None and outcome.correlation.pearson is not None
+    assert outcome.correlation.pearson < 0.0
+    assert any("run against the measurements" in warning for warning in outcome.warnings)

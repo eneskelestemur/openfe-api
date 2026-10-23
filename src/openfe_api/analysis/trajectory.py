@@ -28,6 +28,7 @@ from openfe_api.log import get_logger
 
 __all__ = [
     "END_STATE",
+    "LIGAND_RESNAME",
     "LIGAND_SELECTION",
     "RepeatMetrics",
     "RunStability",
@@ -43,8 +44,10 @@ logger = get_logger(__name__)
 END_STATE = 0
 """The fully interacting Hamiltonian state of a multistate trajectory."""
 
-LIGAND_SELECTION = "resname UNK"
+LIGAND_RESNAME = "UNK"
 """What OpenFE names a small molecule in the topologies it writes."""
+
+LIGAND_SELECTION = f"resname {LIGAND_RESNAME}"
 
 PROTEIN_SELECTION = "protein"
 BACKBONE_SELECTION = "protein and name CA"
@@ -79,7 +82,7 @@ class RepeatMetrics:
         times_ps: Simulation time of each frame.
         protein_rmsd: Backbone RMSD per frame, in angstrom. Empty without a protein.
         ligand_rmsd: Symmetry-corrected ligand RMSD per frame, in angstrom.
-        ligand_drift: Ligand centre-of-mass drift per frame, in angstrom. Empty
+        ligand_drift: Ligand center-of-mass drift per frame, in angstrom. Empty
             without a protein to measure it against.
     """
 
@@ -100,7 +103,7 @@ class RunStability:
     Attributes:
         run: Run name.
         repeats: How many repeats contributed.
-        mean_drift: Mean ligand centre-of-mass drift across every frame, in angstrom.
+        mean_drift: Mean ligand center-of-mass drift across every frame, in angstrom.
         max_drift: Largest drift any frame reached, in angstrom.
         mean_ligand_rmsd: Mean ligand RMSD, in angstrom.
         mean_protein_rmsd: Mean backbone RMSD, in angstrom.
@@ -218,6 +221,12 @@ def open_trajectory(source: TrajectorySource) -> mda.Universe:
         apply_complex_alignment_transformations(universe, protein, [ligands])
     elif len(ligands):
         apply_ligand_alignment_transformations(universe, ligands)
+
+    if not np.isfinite(universe.select_atoms("all").positions).all():
+        raise InputValidationError(
+            f"{source.trajectory}: aligning the trajectory produced invalid coordinates. "
+            "The structure may be too small or too symmetric to superpose."
+        )
     return universe
 
 

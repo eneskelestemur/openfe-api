@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
 
 import MDAnalysis as mda
 from prolif.fingerprint import Fingerprint
@@ -67,21 +68,22 @@ def measure_interactions(source: TrajectorySource, run: str, repeat: int) -> lis
         universe.trajectory.close()
 
 
-def _as_molecule(atoms: mda.AtomGroup, source_name: str) -> Molecule:
-    """Convert a selection for prolif, falling back where the chemistry is not valid.
+def _conversion(atoms: mda.AtomGroup, source_name: str) -> dict[str, Any]:
+    """Settle once how a selection converts for prolif, since every frame repeats it.
 
     A relative hybrid topology fuses both ligands of an edge onto shared atoms, so bond
     orders cannot be inferred from it. Skipping that inference keeps the contacts
     measurable, at the cost of the typing that distinguishes a donor from an acceptor.
     """
     try:
-        return Molecule.from_mda(atoms)
+        Molecule.from_mda(atoms)
     except Exception:
         logger.warning(
             "Bond orders could not be inferred for %s; interaction typing on it is approximate",
             source_name,
         )
-        return Molecule.from_mda(atoms, inferrer=None)
+        return {"inferrer": None}
+    return {}
 
 
 def _fingerprint(
@@ -101,6 +103,7 @@ def _fingerprint(
     # OpenFE writes CONECT records for the ligand only, so the pocket arrives without bonds
     # and every interaction would come back empty.
     pocket.guess_bonds()
+    pocket_options = _conversion(pocket, source_name)
 
     found: list[ResidueContact] = []
     for residue in ligands.residues:
@@ -109,14 +112,15 @@ def _fingerprint(
         )
         counts: defaultdict[tuple[str, str], int] = defaultdict(int)
         frames = 0
+        ligand_options = _conversion(residue.atoms, source_name)
         fingerprint = Fingerprint()
         # The generated value is one bit per interaction, in the fingerprint's own order.
         names = list(fingerprint.interactions)
         for _ in universe.trajectory:
             frames += 1
             contacts = fingerprint.generate(
-                _as_molecule(residue.atoms, source_name),
-                _as_molecule(pocket, source_name),
+                Molecule.from_mda(residue.atoms, **ligand_options),
+                Molecule.from_mda(pocket, **pocket_options),
                 metadata=False,
             )
             for (_, pocket_residue), present in contacts.items():

@@ -6,6 +6,7 @@ two analyses in background threads would share.
 
 from __future__ import annotations
 
+from os.path import commonprefix
 from pathlib import Path
 
 import numpy as np
@@ -376,6 +377,16 @@ def ranking_figure(predictions: list[Prediction], title: str, theme: Theme, path
     return _save(figure, path)
 
 
+def _run_labels(runs: list[str], limit: int = 26) -> list[str]:
+    """Shorten run names to what tells them apart.
+
+    Edge names share a prefix long enough to crowd the plot off the figure.
+    """
+    shared = commonprefix(runs) if len(runs) > 1 else ""
+    labels = [run[len(shared) :] or run for run in runs]
+    return [label if len(label) <= limit else f"{label[: limit - 1]}\u2026" for label in labels]
+
+
 def stability_figure(summaries: list[RunStability], title: str, theme: Theme, path: Path) -> Path:
     """Draw how far each run's ligand moved, ordered worst first.
 
@@ -430,19 +441,18 @@ def stability_figure(summaries: list[RunStability], title: str, theme: Theme, pa
     )
 
     axes.set_yticks(positions)
-    axes.set_yticklabels([entry.run for entry in ordered], fontsize=8)
+    axes.set_yticklabels(_run_labels([entry.run for entry in ordered]), fontsize=8)
     axes.set_ylim(-0.8, len(ordered) - 0.2)
     axes.set_xlim(left=0.0)
-    axes.set_xlabel("Ligand centre-of-mass drift (\u00c5)")
+    axes.set_xlabel("Ligand center-of-mass drift (\u00c5)")
     axes.set_title(title, color=theme.primary_ink, loc="left", pad=10)
     axes.legend(
         loc="lower right",
+        bbox_to_anchor=(1.0, 1.0),
+        ncols=2,
         fontsize=7.5,
         labelcolor=theme.secondary_ink,
-        frameon=True,
-        facecolor=theme.surface,
-        edgecolor=theme.axis,
-        framealpha=1.0,
+        frameon=False,
     )
 
     return _save(figure, path)
@@ -504,7 +514,7 @@ def interaction_figure(
     colors = LinearSegmentedColormap.from_list("occupancy", SEQUENTIAL)
     image = axes.imshow(grid, cmap=colors, vmin=0.0, vmax=1.0, aspect="auto")
     axes.set_xticks(np.arange(len(runs)))
-    axes.set_xticklabels(runs, fontsize=7, rotation=30, ha="right")
+    axes.set_xticklabels(_run_labels(runs), fontsize=7, rotation=30, ha="right")
     axes.set_yticks(np.arange(len(rows)))
     axes.set_yticklabels([f"{residue}  {kind}" for residue, kind in rows], fontsize=7)
     axes.set_title(title, color=theme.primary_ink, loc="left", pad=10)
