@@ -24,6 +24,7 @@ from openfe_api.protocols.rbfe import PHASES
 from openfe_api.results.gather import KCAL, as_array, load_result_json, to_kcal
 
 __all__ = [
+    "MINIMUM_UNCERTAINTY",
     "CycleClosure",
     "EdgeReader",
     "EdgeResult",
@@ -45,6 +46,14 @@ logger = get_logger(__name__)
 
 FIT_SOURCE = "openfe-api"
 """Source label every edge shares, so the fit runs once over the whole network."""
+
+MINIMUM_UNCERTAINTY = 1e-3
+"""Smallest uncertainty an edge may carry into the fit, in kcal/mol.
+
+The solver weights each edge by one over its uncertainty and refuses a zero outright. An
+edge between two identical ligands reports exactly that, and without a floor one such edge
+costs the whole network its per-ligand values.
+"""
 
 
 @dataclass
@@ -311,13 +320,23 @@ def _fit(edges: list[EdgeResult]) -> tuple[list[LigandEstimate], list[CycleClosu
     for edge in edges:
         if edge.ddg is None:
             continue
+        uncertainty = edge.uncertainty or 0.0
+        if uncertainty < MINIMUM_UNCERTAINTY:
+            logger.warning(
+                "%s reports an uncertainty of %.4f kcal/mol; the fit reads it as %g, which is "
+                "the smallest value the solver accepts. The edge is weighted as near-exact.",
+                edge.name,
+                uncertainty,
+                MINIMUM_UNCERTAINTY,
+            )
+            uncertainty = MINIMUM_UNCERTAINTY
         # One source for every edge: cinnabar fits each source group separately, so per-edge
         # sources would fit each edge alone instead of the network.
         femap.add_relative_calculation(
             edge.ligand_a,
             edge.ligand_b,
             edge.ddg * KCAL,
-            (edge.uncertainty or 0.0) * KCAL,
+            uncertainty * KCAL,
             source=FIT_SOURCE,
         )
 

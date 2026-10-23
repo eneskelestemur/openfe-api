@@ -114,5 +114,14 @@ def read_measurements(path: Path) -> dict[str, Measurement]:
     if not measurements:
         raise InputValidationError(f"{path}: no rows with both a ligand name and a value")
 
+    if all(entry.dg >= 0.0 for entry in measurements.values()):
+        logger.warning(
+            "%s: every value in '%s' is positive. A binding free energy is negative, so this "
+            "looks like a pIC50 or a pKi rather than a dG in kcal/mol. Values are used as "
+            "given, and an affinity used directly correlates the wrong way round.",
+            path,
+            value_column,
+        )
+
     logger.info("Read %d measured value(s) from %s", len(measurements), path)
     return measurements

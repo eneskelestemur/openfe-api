@@ -81,3 +81,24 @@ def test_a_table_with_no_usable_rows_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(InputValidationError, match="no rows"):
         read_measurements(table)
+
+
+def test_an_affinity_column_is_called_out(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A pIC50 rises where a free energy falls, so it correlates the wrong way round."""
+    table = _write(tmp_path / "exp.csv", "name,experimental\nlig_a,7.2\nlig_b,8.4\n")
+
+    with caplog.at_level("WARNING"):
+        read_measurements(table)
+
+    assert "pIC50" in caplog.text
+
+
+def test_real_free_energies_draw_no_such_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    table = _write(tmp_path / "exp.csv", "name,dg\nlig_a,-9.2\nlig_b,-8.1\n")
+
+    with caplog.at_level("WARNING"):
+        read_measurements(table)
+
+    assert "pIC50" not in caplog.text

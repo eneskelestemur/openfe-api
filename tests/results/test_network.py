@@ -356,8 +356,11 @@ def test_an_edge_of_single_repeats_has_a_usable_uncertainty(tmp_path: Path) -> N
     assert results.ligands, "a zero uncertainty would have made the fit refuse this edge"
 
 
-def test_an_unsolvable_fit_keeps_the_edge_values(tmp_path: Path) -> None:
-    """A fit that cannot be solved must not discard the per-edge values already computed."""
+def test_an_edge_without_any_uncertainty_still_fits(tmp_path: Path) -> None:
+    """An edge between two identical ligands reports zero, which the solver refuses.
+
+    One such edge in a real network would otherwise cost every ligand its fitted value.
+    """
     for phase, estimate in (("solvent", -2.0), ("complex", -5.0)):
         write_phase_result(
             tmp_path / "runs" / "a_to_b" / phase / "repeat1" / "results.json",
@@ -369,5 +372,7 @@ def test_an_unsolvable_fit_keeps_the_edge_values(tmp_path: Path) -> None:
     results = gather_network(tmp_path, plan([("a", "b")]))
 
     assert results.usable_edges[0].ddg == pytest.approx(-3.0)
-    assert results.ligands == []
-    assert any("per-ligand fit could not be solved" in w for w in results.warnings)
+    assert results.usable_edges[0].uncertainty == pytest.approx(0.0)
+    assert {entry.name for entry in results.ligands} == {"a", "b"}
+    difference = {entry.name: entry.dg for entry in results.ligands}
+    assert difference["b"] - difference["a"] == pytest.approx(-3.0, abs=0.01)
