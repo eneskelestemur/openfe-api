@@ -5,65 +5,36 @@ structures, on a Slurm cluster or a server VM. Usable as a Python library, a com
 tool, and a containerized HTTP service.
 
 !!! warning "Early development"
-    Every protocol is implemented: absolute (ABFE), relative (RBFE) and separated topologies
-    (SepTop) binding free energies, and plain MD. Each has run end to end on GPUs against a
-    real series, but those runs were short plumbing checks, so no production-length numbers
-    have been produced yet.
+    Every protocol is implemented and has run end to end on GPUs against a real series, but
+    only at smoke lengths, so no production-length numbers have been produced yet.
 
 ## Why this exists
 
-**An API, so jobs run without anyone driving them.** The library sits behind an HTTP service,
-so a long-running server can accept a campaign, queue it on the cluster, and report its
-progress. The campaign directory is the shared state, so work started through the service can
-be inspected or continued from the CLI, and vice versa.
+**An API, so jobs run without anyone driving them.** A long-running server accepts a
+campaign, queues it on the cluster, and reports progress. The campaign directory is the
+shared state, so work started through the service continues from the CLI, and the reverse.
 
-**Agents can drive it.** A campaign is one validated document and each stage is one call, which
-is what an agent needs to run a free energy calculation without a person translating between
-steps. The service publishes an OpenAPI schema generated from the same models the CLI uses, so
-a tool discovers the contract rather than being taught it.
+**Agents can drive it.** A campaign is one validated document and each stage is one call.
+The service publishes an OpenAPI schema generated from the same models the CLI uses, so a
+tool discovers the contract rather than being taught it.
 
 **Inputs are declared, not guessed.** Structure-model ligands carry no hydrogens and no bond
 orders, and the SMILES written inside the file can be wrong. You supply the chemistry; the
-structure supplies only the pose. A run either starts from what you declared, or it fails with
-a message naming the file, the residue and the rule that was broken.
+structure supplies the pose. A run either starts from what you declared, or fails naming the
+file, the residue and the rule that was broken.
 
-## What it does
+## The pipeline
 
-<div class="grid cards" markdown>
-
--   __Prepare__
-
-    Recovers bond orders from your SMILES, protonates the protein, handles cofactors and
-    duplicate chains, and checks the result parameterizes before any GPU time is spent.
-
--   __Plan__
-
-    Builds the chemical systems, assigns partial charges once and caches them, validates
-    against the protocol, and tells you the simulation cost before you commit.
-
--   __Execute__
-
-    Runs each repeat as its own process on Slurm or locally, packs repeats onto GPUs with
-    CUDA MPS, and resumes cleanly after a wall-time limit.
-
--   __Gather__
-
-    Combines repeats into free energies and checks convergence against OpenFE's own
-    criteria, or collects the trajectories a plain MD run produced.
-
-</div>
-
-## The four protocols
-
-| Protocol | Answers | Reach for it when |
+| Stage | Command | What it does |
 |---|---|---|
-| [ABFE](preparation.md) | absolute ΔG per ligand | you need a number per ligand, not a comparison |
-| [RBFE](rbfe.md) | ΔΔG per edge | the ligands are a congeneric series |
-| [SepTop](septop.md) | ΔΔG per edge | the perturbation is a scaffold hop RBFE cannot map |
-| [Plain MD](md.md) | a trajectory | you want to simulate a system, or relax one first |
+| Prepare | `prep` | Rebuilds molecules from your SMILES, protonates the protein, checks it parameterizes |
+| Plan | `plan` | Charges, chemical systems, transformations, and the cost before you commit |
+| Execute | `submit` | One process per repeat, on Slurm or locally, resumable |
+| Gather | `gather` | Repeats into free energies, checked against OpenFE's criteria |
+| Analyze | `analyze` | Figures, correlation against measurement, trajectory metrics |
 
-## Where to go next
+## Start here
 
-- [Getting started](getting-started.md) runs a whole campaign end to end.
-- [Input contract](input-contract.md) is the reference for what a request must contain.
-- [Service and container](service.md) covers the HTTP API and images.
+- [Install](start/install.md), then [your first campaign](start/quickstart.md).
+- [Choosing a protocol](protocols/index.md) compares ABFE, RBFE, SepTop and plain MD.
+- [Service and container](running/service.md) covers the HTTP API and the images.

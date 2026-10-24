@@ -12,20 +12,18 @@ covers correlation against measurement, trajectory stability and pocket interact
 
 ## Why
 
-**An API, so jobs run without anyone driving them.** The library sits behind an HTTP service,
-so a long-running server can accept a campaign, queue it on the cluster, and report its
-progress. The campaign directory is the shared state, so work started through the service can
-be inspected or continued from the CLI, and vice versa.
+**An API, so jobs run without anyone driving them.** A long-running server accepts a
+campaign, queues it on the cluster, and reports progress. The campaign directory is the
+shared state, so work started through the service continues from the CLI, and the reverse.
 
-**Agents can drive it.** A campaign is one validated document and each stage is one call, which
-is what an agent needs to run a free energy calculation without a person translating between
-steps. The service publishes an OpenAPI schema generated from the same models the CLI uses, so
-a tool discovers the contract rather than being taught it.
+**Agents can drive it.** A campaign is one validated document and each stage is one call.
+The service publishes an OpenAPI schema generated from the same models the CLI uses, so a
+tool discovers the contract rather than being taught it.
 
 **Inputs are declared, not guessed.** Structure-model ligands carry no hydrogens and no bond
 orders, and the SMILES written inside the file can be wrong. You supply the chemistry; the
-structure supplies only the pose. A run either starts from what you declared, or it fails with
-a message naming the file, the residue and the rule that was broken.
+structure supplies the pose. A run either starts from what you declared, or fails naming the
+file, the residue and the rule that was broken.
 
 ## The protocols
 
@@ -109,7 +107,7 @@ CLI, so the two are interchangeable.
 uvicorn openfe_api.service:app --host 0.0.0.0 --port 8000
 ```
 
-Interactive documentation is served at `/docs`; see [docs/service.md](docs/service.md) for the
+Interactive documentation is served at `/docs`; see [docs/running/service.md](docs/running/service.md) for the
 endpoints, the environment variables, and the Docker and Apptainer images in
 [container/](container/).
 
@@ -137,7 +135,7 @@ pip install -e '.[service,dev,docs]'
 pytest
 ```
 
-[docs/contributing.md](docs/contributing.md) has the checks a change has to pass and the house
+[docs/reference/contributing.md](docs/reference/contributing.md) has the checks a change has to pass and the house
 rules that shape most of them.
 
 ## Citation

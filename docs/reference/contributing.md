@@ -52,7 +52,7 @@ copy for the citation, and a test fails if the two drift. Cutting a release is:
 1. Bump `version` in `pyproject.toml`.
 2. Bump `version` and `date-released` in `CITATION.cff`.
 3. Move `CHANGELOG.md`'s unreleased entries under the new version with today's date.
-4. Tag it: `git tag -a v0.2.0 -m "v0.2.0" && git push --tags`.
+4. Tag it: `git tag -a v0.3.0 -m "v0.3.0" && git push --tags`.
 
 [Semantic versioning](https://semver.org/spec/v2.0.0.html) applies to the request schema, the
 CLI and the public library API. The campaign directory layout is part of that contract too: a

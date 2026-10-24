@@ -23,6 +23,8 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- The documentation is reorganized into Start here, Protocols, Running, Results and
+  Reference, with a page for ABFE, which had none. Page URLs have changed.
 - An edge whose uncertainty comes out as zero, as one between two identical ligands does, no
   longer costs the network its per-ligand fit: the solver reads it as 0.001 kcal/mol and says
   so.

@@ -24,25 +24,38 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Input contract: input-contract.md
-  - Preparation: preparation.md
-  - Planning: planning.md
-  - Relative binding free energy: rbfe.md
-  - Separated topologies: septop.md
-  - Plain MD and relaxation: md.md
-  - Execution: execution.md
-  - Results: results.md
-  - Analysis: analysis.md
-  - Service and container: service.md
-  - CLI reference: cli.md
-  - API reference: api.md
-  - Contributing: contributing.md
+  - Start here:
+      - Install: start/install.md
+      - Your first campaign: start/quickstart.md
+      - How a campaign works: start/campaign.md
+  - Protocols:
+      - Choosing a protocol: protocols/index.md
+      - ABFE: protocols/abfe.md
+      - RBFE: protocols/rbfe.md
+      - SepTop: protocols/septop.md
+      - Plain MD and relaxation: protocols/md.md
+  - Running:
+      - Input contract: running/inputs.md
+      - Preparation and planning: running/prepare.md
+      - Execution: running/execution.md
+      - Service and container: running/service.md
+  - Results:
+      - Gathering results: results/gather.md
+      - Analysis: results/analysis.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Python API: reference/api.md
+      - Contributing: reference/contributing.md
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
 
 markdown_extensions:
   - admonition
   - attr_list
-  - md_in_html          # required by the grid cards on the landing page
   - pymdownx.details
   - pymdownx.superfences
   - tables

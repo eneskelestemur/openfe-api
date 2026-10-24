@@ -133,7 +133,8 @@ def read_predictions(campaign: Campaign) -> tuple[list[Prediction], bool]:
             if not summary.is_file():
                 raise InputValidationError(
                     f"{campaign.manifest.name}: no planned network at {summary}, so there is "
-                    "nothing to analyze yet. Run 'plan' and 'submit' first."
+                    "nothing to analyze yet. Run 'openfe-api plan' and 'openfe-api submit' "
+                    "first."
                 )
             planned = json.loads(summary.read_text(encoding="utf-8"))
             network = gather_network(campaign.directory, planned, reader)
@@ -153,8 +154,8 @@ def read_predictions(campaign: Campaign) -> tuple[list[Prediction], bool]:
 
     if not predictions:
         raise InputValidationError(
-            f"{campaign.manifest.name}: no finished results to analyze. Check 'status', and "
-            "run 'gather' to see what each run produced."
+            f"{campaign.manifest.name}: no finished results to analyze. Run "
+            "'openfe-api status' and 'openfe-api gather' to see what each run produced."
         )
     return predictions, relative
 
