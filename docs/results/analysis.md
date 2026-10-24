@@ -12,7 +12,7 @@ arrive. Everything lands in `analysis/`.
 | `ranking.png`, `predictions.tsv` | Ligands ordered by predicted ΔG, with uncertainties |
 | `correlation.png`, `correlation.tsv` | Predicted against measured, when measurements were given |
 | `metrics.json` | Pearson, Spearman, Kendall, MUE, RMSE, and the package versions behind everything here |
-| `plots/` | The overlap, exchange and convergence plots OpenFE wrote, linked from `runs/` |
+| `plots/` | The plots OpenFE wrote, linked from `runs/` under names saying which run they came from |
 | `stability.png`, `stability.tsv`, `trajectory.tsv` | Ligand and protein movement, with `--trajectories` |
 | `interactions.png`, `interactions.tsv` | Pocket contact occupancy, with `--trajectories` |
 | `scenes/` | A representative pose per run, with `--trajectories` |
@@ -65,6 +65,13 @@ reported as a warning and the rest carry on.
 
 Drift is measured against the protein, so it is left out of a solvent phase and of a ligand
 simulated alone. An apo system reports protein RMSD and nothing else.
+
+!!! warning "`plots/` disagrees with `stability.tsv` on purpose"
+    OpenFE's own `ligand_RMSD.png`, `ligand_COM_drift.png` and `protein_2D_RMSD.png` are
+    linked in unchanged, and they are computed without alignment: a ligand crossing a
+    periodic boundary reads as a jump of one box length. On the PGK2 edges those plots show
+    18.4 Å mean drift where the aligned answer is 2.1 Å. Read `stability.tsv` for drift and
+    treat those three as OpenFE's own output.
 
 ## Pocket interactions
 

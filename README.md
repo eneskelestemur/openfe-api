@@ -18,7 +18,8 @@ shared state, so work started through the service continues from the CLI, and th
 
 **Agents can drive it.** A campaign is one validated document and each stage is one call.
 The service publishes an OpenAPI schema generated from the same models the CLI uses, so a
-tool discovers the contract rather than being taught it.
+tool discovers the contract rather than being taught it, and
+[`.claude/skills/`](.claude/skills/) carries four skills that teach an agent the workflow.
 
 **Inputs are declared, not guessed.** Structure-model ligands carry no hydrogens and no bond
 orders, and the SMILES written inside the file can be wrong. You supply the chemistry; the

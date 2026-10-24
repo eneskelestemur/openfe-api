@@ -6,7 +6,7 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-23
+## [0.3.0] - 2026-10-24
 
 ### Added
 
@@ -20,6 +20,8 @@ All notable changes to this project are recorded here. The format follows
   Slurm job, under the profile `--profile` names or the campaign's own.
 - The overlap, exchange and convergence plots OpenFE writes are linked into `analysis/plots/`
   under names saying which run and repeat they came from.
+- Four agent skills under `.claude/skills/`: `run-campaign`, `write-request`,
+  `drive-service` and `read-results`.
 
 ### Changed
 
