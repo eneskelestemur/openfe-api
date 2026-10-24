@@ -19,9 +19,12 @@ ruff check             # must report no findings
 mkdocs serve           # docs at http://127.0.0.1:8000
 ```
 
-Formatting and linting are not a matter of taste here: the rule set is pinned in
-`pyproject.toml` so a tool upgrade cannot move it. Run `ruff format` and `ruff check` before
-calling a change finished.
+Formatting and linting are not a matter of taste here: the rule set and the ruff version are
+both pinned in `pyproject.toml`, so a tool upgrade cannot move the style on its own. Run
+`ruff format` and `ruff check` before calling a change finished.
+
+Before lifting that version cap, run `ruff check --preview .` to see which rules the next
+release will add.
 
 ## House rules
 
@@ -52,7 +55,9 @@ copy for the citation, and a test fails if the two drift. Cutting a release is:
 1. Bump `version` in `pyproject.toml`.
 2. Bump `version` and `date-released` in `CITATION.cff`.
 3. Move `CHANGELOG.md`'s unreleased entries under the new version with today's date.
-4. Tag it: `git tag -a v0.3.0 -m "v0.3.0" && git push --tags`.
+4. Push, wait for CI to pass on that commit, then tag it:
+   `git tag -a v0.3.2 -m "v0.3.2" && git push --tags`. A tag claims the commit builds, so it
+   goes on after the checks are green, never in the same breath as the push.
 
 [Semantic versioning](https://semver.org/spec/v2.0.0.html) applies to the request schema, the
 CLI and the public library API. The campaign directory layout is part of that contract too: a

@@ -6,7 +6,35 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-24
+## [0.3.2] - 2026-10-24
+
+### Fixed
+
+- The shared-prefix calculation behind the figure axis labels no longer goes through
+  `os.path.commonprefix`, which ruff 0.17 rejects for comparing strings character by
+  character. The labels are unchanged; the suggested replacement would have silently
+  stopped shortening them.
+
+### Changed
+
+- `ruff` is capped below 0.17 in the dev extras, so a release that adds rules to the
+  selected families cannot fail the build on code that already passed.
+
+## [0.3.1] - 2026-10-24
+
+### Added
+
+- Four agent skills under `.claude/skills/`: `run-campaign`, `write-request`,
+  `drive-service` and `read-results`.
+
+### Changed
+
+- The documentation is reorganized into Start here, Protocols, Running, Results and
+  Reference, with a page for ABFE, which had none. Page URLs have changed.
+- The analysis page says that the trajectory plots linked from `analysis/plots/` are
+  OpenFE's own and are measured without alignment, so `stability.tsv` is the drift to read.
+
+## [0.3.0] - 2026-10-23
 
 ### Added
 
@@ -20,13 +48,9 @@ All notable changes to this project are recorded here. The format follows
   Slurm job, under the profile `--profile` names or the campaign's own.
 - The overlap, exchange and convergence plots OpenFE writes are linked into `analysis/plots/`
   under names saying which run and repeat they came from.
-- Four agent skills under `.claude/skills/`: `run-campaign`, `write-request`,
-  `drive-service` and `read-results`.
 
 ### Changed
 
-- The documentation is reorganized into Start here, Protocols, Running, Results and
-  Reference, with a page for ABFE, which had none. Page URLs have changed.
 - An edge whose uncertainty comes out as zero, as one between two identical ligands does, no
   longer costs the network its per-ligand fit: the solver reads it as 0.001 kcal/mol and says
   so.
@@ -128,7 +152,9 @@ First release. This entry describes what the project does.
   front and leaves simulation output out unless asked for.
 - Docker and Apptainer images carrying both entry points.
 
-[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/eneskelestemur/openfe-api/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/eneskelestemur/openfe-api/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/eneskelestemur/openfe-api/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/eneskelestemur/openfe-api/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/eneskelestemur/openfe-api/compare/v0.1.0...v0.1.1

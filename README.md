@@ -6,7 +6,7 @@ containerized FastAPI service.
 
 **[Documentation](https://eneskelestemur.github.io/openfe-api/)**
 
-Status: early development, version 0.3.0. Every protocol is implemented and has run end to end
+Status: early development, version 0.3.2. Every protocol is implemented and has run end to end
 on GPUs, but only at smoke lengths, so no production numbers have been produced yet. Analysis
 covers correlation against measurement, trajectory stability and pocket interactions.
 

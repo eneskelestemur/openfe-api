@@ -6,7 +6,6 @@ two analyses in background threads would share.
 
 from __future__ import annotations
 
-from os.path import commonprefix
 from pathlib import Path
 
 import numpy as np
@@ -382,8 +381,13 @@ def _run_labels(runs: list[str], limit: int = 26) -> list[str]:
 
     Edge names share a prefix long enough to crowd the plot off the figure.
     """
-    shared = commonprefix(runs) if len(runs) > 1 else ""
-    labels = [run[len(shared) :] or run for run in runs]
+    shared = 0
+    if len(runs) > 1:
+        for letters in zip(*runs, strict=False):
+            if len(set(letters)) > 1:
+                break
+            shared += 1
+    labels = [run[shared:] or run for run in runs]
     return [label if len(label) <= limit else f"{label[: limit - 1]}\u2026" for label in labels]
 
 
